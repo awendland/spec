@@ -5,6 +5,9 @@ directories:
 * [`js-api/`](js-api/), tests for the JavaScript API.
 * [`html/`](html/), tests for the JavaScript API in a DOM environment.
 
+Each of these directories has a README.md file with instructions on how to
+run that directory's set of tests.
+
 A list of to-do's can be found [here](Todo.md).
 
 ## Multi-stage testing

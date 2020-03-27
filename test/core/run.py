@@ -32,6 +32,9 @@ if not os.path.exists(wasmCommand):
 Error: The executable '%s' does not exist.
 Provide the correct path with the '--wasm' flag.
 
+Usually, the wasm executable is built from the `interpreter/` directory
+using `make`, and is therefore located at `../../interpreter/wasm`.
+
 """ % (wasmCommand))
   parser.print_help()
   sys.exit(1)
