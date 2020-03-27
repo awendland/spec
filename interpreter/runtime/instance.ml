@@ -1,7 +1,18 @@
 open Types
 
+type module_inst_uid = ModuleInstUID of int32
+let lastID = ref 0l
+let issue_module_inst_uid () : module_inst_uid =
+  let newID = Int32.add !lastID 1l in
+  if newID < !lastID then assert false;
+  lastID := newID;
+  ModuleInstUID !lastID
+
 type module_inst =
 {
+  uid : module_inst_uid;
+  new_abstypes : value_type list;
+  sealed_abstypes : sealed_abstype_inst list;
   types : func_type list;
   funcs : func_inst list;
   tables : table_inst list;
@@ -12,6 +23,7 @@ type module_inst =
   datas : data_inst list;
 }
 
+and sealed_abstype_inst = module_inst_uid * int32
 and func_inst = module_inst ref Func.t
 and table_inst = Table.t
 and memory_inst = Memory.t
@@ -21,10 +33,16 @@ and elem_inst = Values.ref_ list ref
 and data_inst = string ref
 
 and extern =
+  | ExternAbsTypeInst of sealed_abstype_inst
   | ExternFunc of func_inst
   | ExternTable of table_inst
   | ExternMemory of memory_inst
   | ExternGlobal of global_inst
+
+
+type host_module_inst =
+  | HostInst
+  | ModuleInst of module_inst
 
 
 (* Reference types *)
@@ -47,14 +65,10 @@ let () =
 (* Auxiliary functions *)
 
 let empty_module_inst =
-  { types = []; funcs = []; tables = []; memories = []; globals = [];
-    exports = []; elems = []; datas = [] }
-
-let extern_type_of = function
-  | ExternFunc func -> ExternFuncType (Func.type_of func)
-  | ExternTable tab -> ExternTableType (Table.type_of tab)
-  | ExternMemory mem -> ExternMemoryType (Memory.type_of mem)
-  | ExternGlobal glob -> ExternGlobalType (Global.type_of glob)
+  { uid = issue_module_inst_uid ();
+    new_abstypes = []; sealed_abstypes = []; types = []; funcs = [];
+    tables = []; memories = []; globals = []; exports = [];
+    elems = []; datas = [] }
 
 let export inst name =
   try Some (List.assoc name inst.exports) with Not_found -> None

@@ -3,8 +3,8 @@ set NAME=wasm
 if '%1' neq '' set NAME=%1
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/numeric_error.cmo exec/numeric_error.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/int.cmo exec/int.ml
-ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I util -I main -I syntax -I text -I binary -I exec -I script -I runtime -I host -I valid -o util/lib.cmi util/lib.mli
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/i32.cmo exec/i32.ml
+ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I util -I main -I syntax -I text -I binary -I exec -I script -I runtime -I host -I valid -o util/lib.cmi util/lib.mli
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/float.cmo exec/float.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I syntax -I main -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o syntax/types.cmo syntax/types.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/f32.cmo exec/f32.ml
@@ -19,7 +19,9 @@ ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I runtime -I main -I syntax 
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I runtime -I main -I syntax -I text -I binary -I exec -I script -I util -I host -I valid -o runtime/table.cmi runtime/table.mli
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I runtime -I main -I syntax -I text -I binary -I exec -I script -I util -I host -I valid -o runtime/instance.cmo runtime/instance.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/eval.cmi exec/eval.mli
+ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I runtime -I main -I syntax -I text -I binary -I exec -I script -I util -I host -I valid -o runtime/extern_types.cmo runtime/extern_types.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I binary -I main -I syntax -I text -I exec -I script -I runtime -I util -I host -I valid -o binary/utf8.cmi binary/utf8.mli
+ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I syntax -I main -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o syntax/types_shorthand.cmo syntax/types_shorthand.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I host -I main -I syntax -I text -I binary -I exec -I script -I runtime -I util -I valid -o host/env.cmo host/env.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I main -I syntax -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o main/flags.cmo main/flags.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I script -I main -I syntax -I text -I binary -I exec -I runtime -I util -I host -I valid -o script/import.cmi script/import.mli
@@ -55,6 +57,7 @@ ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I runtime -I main -I syntax 
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/f32_convert.cmo exec/f32_convert.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/f64_convert.cmo exec/f64_convert.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I exec -I main -I syntax -I text -I binary -I script -I runtime -I util -I host -I valid -o exec/i32_convert.cmo exec/i32_convert.ml
+ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I syntax -I main -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o syntax/free.cmi syntax/free.mli
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I syntax -I main -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o syntax/operators.cmo syntax/operators.ml
 ocamlyacc text/parser.mly
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/parser.cmi text/parser.mli
@@ -67,9 +70,10 @@ ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I script -I main -I syntax -
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/parse.cmo text/parse.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/print.cmo text/print.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I valid -I main -I syntax -I text -I binary -I exec -I script -I runtime -I util -I host -o valid/valid.cmo valid/valid.ml
+ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I syntax -I main -I text -I binary -I exec -I script -I runtime -I util -I host -I valid -o syntax/free.cmo syntax/free.ml
 ocamllex.opt -q text/lexer.mll
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/lexer.cmo text/lexer.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/parser.cmo text/parser.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I text -I main -I syntax -I binary -I exec -I script -I runtime -I util -I host -I valid -o text/arrange.cmo text/arrange.ml
 ocamlc.opt -c -w +a-3-4-27-42-44-45 -warn-error +a -I util -I main -I syntax -I text -I binary -I exec -I script -I runtime -I host -I valid -o util/sexpr.cmo util/sexpr.ml
-ocamlc.opt bigarray.cma -I util -I binary -I exec -I syntax -I runtime -I host -I main -I script -I text -I valid util/lib.cmo binary/utf8.cmo exec/float.cmo exec/f32.cmo exec/f64.cmo exec/numeric_error.cmo exec/int.cmo exec/i32.cmo exec/i64.cmo exec/i32_convert.cmo exec/f32_convert.cmo exec/i64_convert.cmo exec/f64_convert.cmo syntax/types.cmo syntax/values.cmo runtime/memory.cmo util/source.cmo syntax/ast.cmo exec/eval_numeric.cmo runtime/func.cmo runtime/global.cmo runtime/table.cmo runtime/instance.cmo util/error.cmo exec/eval.cmo host/env.cmo host/spectest.cmo main/flags.cmo script/import.cmo binary/encode.cmo syntax/operators.cmo binary/decode.cmo script/script.cmo text/parser.cmo text/lexer.cmo text/parse.cmo script/js.cmo util/sexpr.cmo text/arrange.cmo text/print.cmo valid/valid.cmo script/run.cmo main/main.cmo -o main/main.byte
+ocamlc.opt bigarray.cma -I util -I binary -I exec -I syntax -I runtime -I main -I host -I script -I text -I valid util/lib.cmo binary/utf8.cmo exec/float.cmo exec/f32.cmo exec/f64.cmo exec/numeric_error.cmo exec/int.cmo exec/i32.cmo exec/i64.cmo exec/i32_convert.cmo exec/f32_convert.cmo exec/i64_convert.cmo exec/f64_convert.cmo syntax/types.cmo syntax/values.cmo runtime/memory.cmo util/source.cmo syntax/ast.cmo exec/eval_numeric.cmo main/flags.cmo runtime/func.cmo runtime/global.cmo runtime/table.cmo runtime/instance.cmo runtime/extern_types.cmo util/error.cmo exec/eval.cmo host/env.cmo syntax/types_shorthand.cmo host/spectest.cmo script/import.cmo syntax/free.cmo binary/encode.cmo syntax/operators.cmo binary/decode.cmo script/script.cmo text/parser.cmo text/lexer.cmo text/parse.cmo script/js.cmo util/sexpr.cmo text/arrange.cmo text/print.cmo valid/valid.cmo script/run.cmo main/main.cmo -o main/main.byte

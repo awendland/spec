@@ -2,21 +2,32 @@
 
 type num_type = I32Type | I64Type | F32Type | F64Type
 type ref_type = NullRefType | AnyRefType | FuncRefType
-type value_type = NumType of num_type | RefType of ref_type | BotType
-type stack_type = value_type list
-type func_type = FuncType of stack_type * stack_type
+type value_type =
+  | NumType of num_type
+  | RefType of ref_type
+  (* Start: Abstract Types *)
+  | SealedAbsType of int32
+  (* End: Abstract Types *)
+  | BotType
+type raw_stack_type = value_type list
+
+type wrapped_value_type =
+  | RawValueType of value_type
+  | NewAbsType of value_type * int32
+type wrapped_stack_type = wrapped_value_type list
+type func_type = FuncType of wrapped_stack_type * wrapped_stack_type
 
 type 'a limits = {min : 'a; max : 'a option}
 type mutability = Immutable | Mutable
 type table_type = TableType of Int32.t limits * ref_type
 type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
-type extern_type =
-  | ExternFuncType of func_type
-  | ExternTableType of table_type
-  | ExternMemoryType of memory_type
-  | ExternGlobalType of global_type
 
+let unwrap = function
+  | RawValueType vt -> vt
+  | NewAbsType (vt, _) -> vt
+
+let unwrap_stack = List.map unwrap
 
 (* Attributes *)
 
@@ -40,6 +51,9 @@ let match_value_type t1 t2 =
   match t1, t2 with
   | NumType t1', NumType t2' -> match_num_type t1' t2'
   | RefType t1', RefType t2' -> match_ref_type t1' t2'
+  (* Start: Abstract Types *)
+  | SealedAbsType a1, SealedAbsType a2 -> a1 = a2
+  (* End: Abstract Types *)
   | BotType, _ -> true
   | _, _ -> false
 
@@ -63,33 +77,19 @@ let match_global_type (GlobalType (t1, mut1)) (GlobalType (t2, mut2)) =
   mut1 = mut2 &&
   (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
 
-let match_extern_type et1 et2 =
-  match et1, et2 with
-  | ExternFuncType ft1, ExternFuncType ft2 -> match_func_type ft1 ft2
-  | ExternTableType tt1, ExternTableType tt2 -> match_table_type tt1 tt2
-  | ExternMemoryType mt1, ExternMemoryType mt2 -> match_memory_type mt1 mt2
-  | ExternGlobalType gt1, ExternGlobalType gt2 -> match_global_type gt1 gt2
-  | _, _ -> false
-
 let is_num_type = function
   | NumType _ | BotType -> true
   | RefType _ -> false
+  (* Start: Abstract Types *)
+  | SealedAbsType _ -> false
+  (* End: Abstract Types *)
 
 let is_ref_type = function
   | NumType _ -> false
   | RefType _ | BotType -> true
-
-
-(* Filters *)
-
-let funcs =
-  Lib.List.map_filter (function ExternFuncType t -> Some t | _ -> None)
-let tables =
-  Lib.List.map_filter (function ExternTableType t -> Some t | _ -> None)
-let memories =
-  Lib.List.map_filter (function ExternMemoryType t -> Some t | _ -> None)
-let globals =
-  Lib.List.map_filter (function ExternGlobalType t -> Some t | _ -> None)
+  (* Start: Abstract Types *)
+  | SealedAbsType _ -> false
+  (* End: Abstract Types *)
 
 
 (* String conversion *)
@@ -108,7 +108,14 @@ let string_of_ref_type = function
 let string_of_value_type = function
   | NumType t -> string_of_num_type t
   | RefType t -> string_of_ref_type t
+  (* Start: Abstract Types *)
+  | SealedAbsType i -> "abs{" ^ Int32.to_string i ^ "}"
+  (* End: Abstract Types *)
   | BotType -> "impossible"
+
+let string_of_wrapped_value_type = function
+  | RawValueType vt -> string_of_value_type vt
+  | NewAbsType (vt, i) -> "new abstype [" ^ string_of_value_type vt ^ "]"
 
 let string_of_value_types = function
   | [t] -> string_of_value_type t
@@ -129,14 +136,11 @@ let string_of_global_type = function
   | GlobalType (t, Immutable) -> string_of_value_type t
   | GlobalType (t, Mutable) -> "(mut " ^ string_of_value_type t ^ ")"
 
-let string_of_stack_type ts =
+let string_of_raw_stack_type ts =
   "[" ^ String.concat " " (List.map string_of_value_type ts) ^ "]"
 
-let string_of_func_type (FuncType (ins, out)) =
-  string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
+let string_of_wrapped_stack_type ts =
+  "[" ^ String.concat " " (List.map string_of_wrapped_value_type ts) ^ "]"
 
-let string_of_extern_type = function
-  | ExternFuncType ft -> "func " ^ string_of_func_type ft
-  | ExternTableType tt -> "table " ^ string_of_table_type tt
-  | ExternMemoryType mt -> "memory " ^ string_of_memory_type mt
-  | ExternGlobalType gt -> "global " ^ string_of_global_type gt
+let string_of_func_type (FuncType (ins, out)) =
+  string_of_wrapped_stack_type ins ^ " -> " ^ string_of_wrapped_stack_type out

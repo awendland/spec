@@ -58,6 +58,12 @@ let at f s =
 
 
 
+(* FIXME add support for abstract types *)
+let fixme_w vt = Types.RawValueType vt
+let fixme_wl = List.map fixme_w
+
+
+
 (* Generic values *)
 
 let u8 s =
@@ -163,7 +169,7 @@ let func_type s =
   | -0x20 ->
     let ins = vec value_type s in
     let out = vec value_type s in
-    FuncType (ins, out)
+    FuncType (fixme_wl ins, fixme_wl out)
   | _ -> error s (pos s - 1) "invalid function type"
 
 let limits vu s =

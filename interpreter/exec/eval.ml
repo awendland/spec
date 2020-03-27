@@ -1,6 +1,7 @@
 open Values
 open Types
 open Instance
+open Extern_types
 open Ast
 open Source
 
@@ -182,7 +183,9 @@ let rec step (c : config) : config =
 
       | CallIndirect (x, y), Num (I32 i) :: vs ->
         let func = func_ref frame.inst x i e.at in
-        if type_ frame.inst y <> Func.type_of func then
+        let func_ety = extern_type_of_func func in
+        let expected_ety = resolve_extern_func_type (ModuleInst frame.inst) (type_ frame.inst y) in
+        if not (match_resolved_func_type func_ety expected_ety) then
           vs, [Trapping "indirect call type mismatch" @@ e.at]
         else
           vs, [Invoke func @@ e.at]
@@ -504,7 +507,7 @@ let rec step (c : config) : config =
       (match func with
       | Func.AstFunc (t, inst', f) ->
         let locals' = List.rev args @ List.map default_value f.it.locals in
-        let code' = [], [Plain (Block (out, f.it.body)) @@ f.at] in
+        let code' = [], [Plain (Block (unwrap_stack out, f.it.body)) @@ f.at] in
         let frame' = {inst = !inst'; locals = List.map ref locals'} in
         vs', [Frame (List.length out, frame', code') @@ e.at]
 
@@ -534,7 +537,7 @@ let invoke (func : func_inst) (vs : value list) : value list =
   let FuncType (ins, out) = Func.type_of func in
   if List.length vs <> List.length ins then
     Crash.error at "wrong number of arguments";
-  if not (List.for_all2 (fun v -> match_value_type (type_of_value v)) vs ins) then
+  if not (List.for_all2 (fun v i -> match_value_type (type_of_value v) (unwrap i)) vs ins) then
     Crash.error at "wrong types of arguments";
   let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
   try List.rev (eval c) with Stack_overflow ->
@@ -569,6 +572,7 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
   let {name; edesc} = ex.it in
   let ext =
     match edesc.it with
+    | AbsTypeExport x -> ExternAbsTypeInst (inst.uid, x.it)
     | FuncExport x -> ExternFunc (func inst x)
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
@@ -583,12 +587,23 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
   let {dinit; _} = seg.it in
   ref dinit
 
-
-let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
-  : module_inst =
-  if not (match_extern_type (extern_type_of ext) (import_type m im)) then
+let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
+  let types_match =
+    match (extern_type_of ext), im.it.idesc.it with
+    | ExternAbsType ate, AbsTypeImport x -> true (* abstype matches are based purely on reference *)
+    | ExternFuncType rfte, FuncImport x ->
+      let fti = func_type_inst inst x in
+      let rfti = resolve_extern_func_type (ModuleInst inst) fti in
+      match_resolved_func_type rfte rfti
+    | ExternTableType tte, TableImport tti -> match_table_type tte tti
+    | ExternMemoryType mte, MemoryImport mti -> match_memory_type mte mti
+    | ExternGlobalType gte, GlobalImport gti -> match_global_type gte gti
+    | _, _ -> false
+  in
+  if not types_match then
     Link.error im.at "incompatible import type";
   match ext with
+  | ExternAbsTypeInst aty -> {inst with sealed_abstypes = aty :: inst.sealed_abstypes}
   | ExternFunc func -> {inst with funcs = func :: inst.funcs}
   | ExternTable tab -> {inst with tables = tab :: inst.tables}
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}
@@ -638,26 +653,38 @@ let init (m : module_) (exts : extern list) : module_inst =
       exports; elems; datas; start
     } = m.it
   in
-  if List.length exts <> List.length imports then
-    Link.error m.at "wrong number of imports provided for initialisation";
   let inst0 =
-    { (List.fold_right2 (add_import m) exts imports empty_module_inst) with
+    { empty_module_inst with
       types = List.map (fun type_ -> type_.it) types }
   in
-  let fs = List.map (create_func inst0) funcs in
-  let inst1 = {inst0 with funcs = inst0.funcs @ fs} in
-  let inst2 =
-    { inst1 with
-      tables = inst1.tables @ List.map (create_table inst1) tables;
-      memories = inst1.memories @ List.map (create_memory inst1) memories;
-      globals = inst1.globals @ List.map (create_global inst1) globals;
+  if List.length exts <> List.length imports then
+    Link.error m.at "wrong number of imports provided for initialisation";
+  (* abstype imports must be resolved first *)
+  let imports, exts =
+    let abstypes_first = fun (im1, _) -> fun (im2, _) ->
+      match im1.it.idesc.it, im2.it.idesc.it with
+      | AbsTypeImport _, AbsTypeImport _ -> 0
+      | AbsTypeImport _, _ -> 1
+      | _ , AbsTypeImport _ -> -1
+      | _ -> 0
+    in
+    List.split (List.stable_sort abstypes_first (List.combine imports exts))
+  in
+  let inst1 = (List.fold_right2 add_import exts imports inst0) in
+  let fs = List.map (create_func inst1) funcs in
+  let inst2 = {inst1 with funcs = inst1.funcs @ fs} in
+  let inst3 =
+    { inst2 with
+      tables = inst2.tables @ List.map (create_table inst2) tables;
+      memories = inst2.memories @ List.map (create_memory inst2) memories;
+      globals = inst2.globals @ List.map (create_global inst2) globals;
     }
   in
   let inst =
-    { inst2 with
-      exports = List.map (create_export inst2) exports;
-      elems = List.map (create_elem inst2) elems;
-      datas = List.map (create_data inst2) datas;
+    { inst3 with
+      exports = List.map (create_export inst3) exports;
+      elems = List.map (create_elem inst3) elems;
+      datas = List.map (create_data inst3) datas;
     }
   in
   List.iter (init_func inst) fs;
