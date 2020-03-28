@@ -70,17 +70,28 @@ let empty () = {map = VarMap.empty; count = 0l}
 type types = {space : space; mutable list : type_ list}
 let empty_types () = {space = empty (); list = []}
 
+(* Start: Abstract Types *)
+type abstypes = {space : space; mutable list : abstype list}
+let empty_abstypes () : abstypes = {space = empty (); list = []}
+(* End: Abstract Types *)
+
 type context =
   { types : types; tables : space; memories : space;
     funcs : space; locals : space; globals : space;
     data : space; elems : space;
-    labels : int32 VarMap.t }
+    labels : int32 VarMap.t;
+    (* Start: Abstract Types *)
+    abstypes : abstypes }
+    (* End: Abstract Types *)
 
 let empty_context () =
   { types = empty_types (); tables = empty (); memories = empty ();
     funcs = empty (); locals = empty (); globals = empty ();
     data = empty (); elems = empty ();
-    labels = VarMap.empty }
+    labels = VarMap.empty;
+    (* Start: Abstract Types *)
+    abstypes = empty_abstypes () }
+    (* End: Abstract Types *)
 
 let enter_func (c : context) =
   {c with labels = VarMap.empty; locals = empty ()}
@@ -89,6 +100,9 @@ let lookup category space x =
   try VarMap.find x.it space.map
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
+(* Start: Abstract Types *)
+(* let abstype (c : context) x = lookup "abstype" c.types.space x *)
+(* End: Abstract Types *)
 let type_ (c : context) x = lookup "type" c.types.space x
 let func (c : context) x = lookup "function" c.funcs x
 let local (c : context) x = lookup "local" c.locals x
@@ -116,6 +130,11 @@ let bind category space x =
     error x.at ("too many " ^ category ^ " bindings");
   i
 
+(* Start: Abstract Types *)
+let bind_abstype (c : context) x ty =
+  c.abstypes.list <- c.abstypes.list @ [ty];
+  bind "abstype" c.abstypes.space x
+(* End: Abstract Types *)
 let bind_type (c : context) x ty =
   c.types.list <- c.types.list @ [ty];
   bind "type" c.types.space x
@@ -136,6 +155,11 @@ let anon category space n =
     error no_region ("too many " ^ category ^ " bindings");
   i
 
+(* Start: Abstract Types *)
+let anon_abstype (c : context) ty =
+  c.abstypes.list <- c.abstypes.list @ [ty];
+  anon "abstype" c.abstypes.space 1l
+(* End: Abstract Types *)
 let anon_type (c : context) ty =
   c.types.list <- c.types.list @ [ty];
   anon "type" c.types.space 1l
@@ -174,6 +198,9 @@ let inline_type_explicit (c : context) x ft at =
 %token MEMORY_SIZE MEMORY_GROW MEMORY_FILL MEMORY_COPY MEMORY_INIT DATA_DROP
 %token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
 %token CONST UNARY BINARY TEST COMPARE CONVERT
+
+%token ABSTYPE_NEW ABSTYPE_ALIAS ABSTYPE_REF
+
 %token REF_ANY REF_NULL REF_FUNC REF_HOST REF_IS_NULL
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
 %token TABLE ELEM MEMORY DATA DECLARE OFFSET ITEM IMPORT EXPORT
@@ -245,6 +272,12 @@ global_type :
 
 def_type :
   | LPAR FUNC func_type RPAR { $3 }
+
+/* Start: Abstract Types */
+/* def_abstype :
+  | LPAR value_type RPAR { $3 } */
+/* just use value_type directly */
+/* End: Abstract Types */
 
 func_type :
   | /* empty */
@@ -846,6 +879,17 @@ inline_export :
     { let at = at () in fun d c -> {name = $3; edesc = d @@ at} @@ at }
 
 
+/* Start: Abstract Types */
+abstype_underlying :
+  | value_type { $1 @@ at () }
+
+abstype_new :
+  | LPAR ABSTYPE_NEW abstype_underlying RPAR
+    { fun c -> anon_abstype c $3 }
+  | LPAR ABSTYPE_NEW bind_var abstype_underlying RPAR  /* Sugar */
+    { fun c -> bind_abstype c $3 $4 }
+/* End: Abstract Types */
+
 /* Modules */
 
 type_ :
@@ -868,6 +912,8 @@ module_fields :
 
 module_fields1 :
   | type_def module_fields
+    { fun c -> ignore ($1 c); $2 c }
+  | abstype_new module_fields
     { fun c -> ignore ($1 c); $2 c }
   | global module_fields
     { fun c -> let gf = $1 c in let mf = $2 c in

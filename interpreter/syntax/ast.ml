@@ -173,6 +173,10 @@ and data_segment' =
 
 type type_ = func_type Source.phrase
 
+(* Start: Abstract Types *)
+type abstype = value_type Source.phrase
+(* End: Abstract Types *)
+
 type export_desc = export_desc' Source.phrase
 and export_desc' =
   | FuncExport of var
