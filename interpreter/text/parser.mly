@@ -71,7 +71,8 @@ type types = {space : space; mutable list : type_ list}
 let empty_types () = {space = empty (); list = []}
 
 (* Start: Abstract Types *)
-type abstypes = {space : space; mutable list : abstype list}
+(* NOTE: because SealedAbsType is a value_type, this approach supports both within module and external abstract types *)
+type abstypes = {space : space; mutable list : value_type list} 
 let empty_abstypes () : abstypes = {space = empty (); list = []}
 (* End: Abstract Types *)
 
@@ -101,7 +102,7 @@ let lookup category space x =
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
 (* Start: Abstract Types *)
-(* let abstype (c : context) x = lookup "abstype" c.types.space x *)
+let abstype (c : context) x = lookup "abstype" c.abstypes.space x
 (* End: Abstract Types *)
 let type_ (c : context) x = lookup "type" c.types.space x
 let func (c : context) x = lookup "function" c.funcs x
@@ -131,8 +132,8 @@ let bind category space x =
   i
 
 (* Start: Abstract Types *)
-let bind_abstype (c : context) x ty =
-  c.abstypes.list <- c.abstypes.list @ [ty];
+let bind_abstype (c : context) x aty =
+  c.abstypes.list <- c.abstypes.list @ [aty];
   bind "abstype" c.abstypes.space x
 (* End: Abstract Types *)
 let bind_type (c : context) x ty =
@@ -261,6 +262,25 @@ ref_type :
 value_type :
   | NUM_TYPE { NumType $1 }
   | ref_type { RefType $1 }
+
+/* Start: Abstract Types */
+abstype_underlying :
+  | value_type { $1 @@ at () }
+
+abstype_new :
+  | LPAR ABSTYPE_NEW abstype_underlying RPAR
+    { fun c -> anon_abstype c $3 }
+  | LPAR ABSTYPE_NEW bind_var abstype_underlying RPAR  /* Sugar */
+    { fun c -> bind_abstype c $3 $4 }
+  /* TODO support imported abstypes */
+
+abstype_ref :
+  | LPAR ABSTYPE_REF var RPAR { $3 }
+
+value_or_abs_type :
+  | value_type { $1 }
+  | abstype_ref { fun c -> abstype c $1 }
+/* End: Abstract Types */
 
 value_type_list :
   | /* empty */ { [] }
@@ -878,17 +898,6 @@ inline_export :
   | LPAR EXPORT name RPAR
     { let at = at () in fun d c -> {name = $3; edesc = d @@ at} @@ at }
 
-
-/* Start: Abstract Types */
-abstype_underlying :
-  | value_type { $1 @@ at () }
-
-abstype_new :
-  | LPAR ABSTYPE_NEW abstype_underlying RPAR
-    { fun c -> anon_abstype c $3 }
-  | LPAR ABSTYPE_NEW bind_var abstype_underlying RPAR  /* Sugar */
-    { fun c -> bind_abstype c $3 $4 }
-/* End: Abstract Types */
 
 /* Modules */
 

@@ -2,7 +2,13 @@
 
 type num_type = I32Type | I64Type | F32Type | F64Type
 type ref_type = NullRefType | AnyRefType | FuncRefType
-type value_type = NumType of num_type | RefType of ref_type | BotType
+type value_type =
+  | NumType of num_type
+  | RefType of ref_type
+  (* Start: Abstract Types *)
+  | SealedAbsType of int
+  (* End: Abstract Types *)
+  | BotType
 type stack_type = value_type list
 type func_type = FuncType of stack_type * stack_type
 
@@ -40,6 +46,9 @@ let match_value_type t1 t2 =
   match t1, t2 with
   | NumType t1', NumType t2' -> match_num_type t1' t2'
   | RefType t1', RefType t2' -> match_ref_type t1' t2'
+  (* Start: Abstract Types *)
+  | SealedAbsType a1, SealedAbsType a2 -> a1 = a2
+  (* End: Abstract Types *)
   | BotType, _ -> true
   | _, _ -> false
 
