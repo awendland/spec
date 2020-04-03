@@ -12,7 +12,7 @@
 
 (module
   ;; TODO is this nesting right? (type (import)) OR (import (type))?
-  (abstype_alias $A (import "MOD_1" "A"))
+  (import "MOD_1" "A" (abstype_alias $A))
   (func $createA (import "MOD_1" "createA") (param i32) (result (abstype_ref $A)))
   (func $useA (import "MOD_1" "useA") (param (abstype_ref $A)))
   (elem (i32.const 42) $createA $useA)

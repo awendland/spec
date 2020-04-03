@@ -589,6 +589,9 @@ let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
   if not (match_extern_type (extern_type_of ext) (import_type m im)) then
     Link.error im.at "incompatible import type";
   match ext with
+  (* Start: Abstract Types *)
+  | ExternAbsTypeInst uid -> {inst with abstypes = TODO :: inst.abstypes}
+  (* End: Abstract Types *)
   | ExternFunc func -> {inst with funcs = func :: inst.funcs}
   | ExternTable tab -> {inst with tables = tab :: inst.tables}
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}

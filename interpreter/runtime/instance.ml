@@ -21,6 +21,9 @@ and elem_inst = Values.ref_ list ref
 and data_inst = string ref
 
 and extern =
+  (* Start: Abstract Type *)
+  | ExternAbsTypeInst of int
+  (* End: Abstract Type *)
   | ExternFunc of func_inst
   | ExternTable of table_inst
   | ExternMemory of memory_inst
@@ -51,6 +54,9 @@ let empty_module_inst =
     exports = []; elems = []; datas = [] }
 
 let extern_type_of = function
+  (* Start: Abstract Types *)
+  | ExternAbsTypeInst uid -> ExternAbsType uid
+  (* End: Abstract Types *)
   | ExternFunc func -> ExternFuncType (Func.type_of func)
   | ExternTable tab -> ExternTableType (Table.type_of tab)
   | ExternMemory mem -> ExternMemoryType (Memory.type_of mem)

@@ -16,6 +16,13 @@ let require b at s = if not b then error at s
 
 type context =
 {
+  (* Start: Abstract Type *)
+  (* NOTE: since within-module abstract types are just treated as
+     normal value_types, this property is only used for SealedAbsTypes.
+     The int items in the list represent global IDs for the SealedAbsTypes.
+   *)
+  abstypes : int list;
+  (* End: Abstract Type *)
   types : func_type list;
   funcs : func_type list;
   tables : table_type list;
@@ -30,7 +37,10 @@ type context =
 }
 
 let empty_context =
-  { types = []; funcs = []; tables = []; memories = [];
+  (* Start: Abstract Type *)
+  { abstypes = [];
+  (* End: Abstract Type *)
+    types = []; funcs = []; tables = []; memories = [];
     globals = []; elems = []; datas = [];
     locals = []; results = []; labels = [];
     refs = Free.empty
@@ -40,6 +50,9 @@ let lookup category list x =
   try Lib.List32.nth list x.it with Failure _ ->
     error x.at ("unknown " ^ category ^ " " ^ Int32.to_string x.it)
 
+(* Start: Abstract Type *)
+let abstype (c : context) x = lookup "abstype" c.abstypes x
+(* End: Abstract Type *)
 let type_ (c : context) x = lookup "type" c.types x
 let func (c : context) x = lookup "function" c.funcs x
 let table (c : context) x = lookup "table" c.tables x
@@ -183,6 +196,12 @@ let check_arity n at =
  *)
 
 let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
+(* TODO Abstract Types
+    Actually, none of this needs to change because:
+    1. The abstract type will be unwrapped and represented as the underlying value type
+    2. The abstract type will be sealed and represented as SealedAbsType of int which won't match
+       unless the ints match (as intended)
+ *)
   match e.it with
   | Unreachable ->
     [] -->... []
@@ -417,6 +436,9 @@ let check_value_type (t : value_type) at =
   match t with
   | NumType t' -> check_num_type t' at
   | RefType t' -> check_ref_type t' at
+  (* Start: Abstract Types *)
+  | SealedAbsType i -> ()
+  (* End: Abstract Types *)
   | BotType -> ()
 
 let check_func_type (ft : func_type) at =
@@ -532,6 +554,11 @@ let check_start (c : context) (start : var option) =
 let check_import (im : import) (c : context) : context =
   let {module_name = _; item_name = _; idesc} = im.it in
   match idesc.it with
+  (* Start: Abstract Type *)
+  | AbsTypeImport x ->
+    {c with abstypes = abstype c x :: c.abstypes }
+    (* TODO make sure that the imported funcs have their abstract types converted to sealed variants *)
+  (* End: Abstract Type *)
   | FuncImport x ->
     {c with funcs = type_ c x :: c.funcs}
   | TableImport tt ->
@@ -549,6 +576,10 @@ module NameSet = Set.Make(struct type t = Ast.name let compare = compare end)
 let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
   let {name; edesc} = ex.it in
   (match edesc.it with
+  (* Start: Abstract Type *)
+  (* TODO make sure that the exprted abstract types are converted to sealed variants *)
+  | AbsTypeExport x -> ignore (abstype c x)
+  (* End: Abstract Type *)
   | FuncExport x -> ignore (func c x)
   | TableExport x -> ignore (table c x)
   | MemoryExport x -> ignore (memory c x)
@@ -559,14 +590,21 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
 
 let check_module (m : module_) =
   let
-    { types; imports; tables; memories; globals; funcs; start; elems; datas;
+    (* Start: Abstract Types *)
+    { abtstypes; (* (value_type Source.phrase) list *)
+    (* End: Abstract Types *)
+      types; imports; tables; memories; globals; funcs; start; elems; datas;
       exports } = m.it
   in
   let c0 =
     List.fold_right check_import imports
       { empty_context with
         refs = Free.list Free.elem elems;
-        types = List.map (fun ty -> ty.it) types;
+        (* `types` must be declared up front because the FuncImports in check_import may reference them *)
+        types = List.map (fun ty -> ty.it) types; 
+        (* End: Abstract Types *)
+        abstypes = List.map (fun aty -> aty.it) abstypes;
+        (* Start: Abstract Types *)
       }
   in
   let c1 =

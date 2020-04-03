@@ -13,6 +13,8 @@ type ref_ += NullRef
 
 type value = Num of num | Ref of ref_
 
+(* TODO type sealed_abs = SealedAbs of value *)
+
 
 (* Typing *)
 
@@ -55,6 +57,9 @@ let default_ref = function
 let default_value = function
   | NumType t' -> Num (default_num t')
   | RefType t' -> Ref (default_ref t')
+  (* Start: Abstract Types *)
+  | SealedAbsType _ -> assert false
+  (* End: Abstract Types *)
   | BotType -> assert false
 
 

@@ -175,10 +175,14 @@ type type_ = func_type Source.phrase
 
 (* Start: Abstract Types *)
 type abstype = value_type Source.phrase
+type abstype_id = Int32.t
 (* End: Abstract Types *)
 
 type export_desc = export_desc' Source.phrase
 and export_desc' =
+  (* Start: Abstract Types *)
+  | AbsTypeExport of var
+  (* End: Abstract Types *)
   | FuncExport of var
   | TableExport of var
   | MemoryExport of var
@@ -193,6 +197,9 @@ and export' =
 
 type import_desc = import_desc' Source.phrase
 and import_desc' =
+  (* Start: Abstract Types *)
+  | AbsTypeImport (* Driven by import_desc *)
+  (* End: Abstract Types *)
   | FuncImport of var
   | TableImport of table_type
   | MemoryImport of memory_type
@@ -209,6 +216,8 @@ and import' =
 type module_ = module_' Source.phrase
 and module_' =
 {
+  sealed_abstypes : abstype_id list;
+  open_abstypes : 
   types : type_ list;
   globals : global list;
   tables : table list;
@@ -226,6 +235,7 @@ and module_' =
 
 let empty_module =
 {
+  abstypes = [];
   types = [];
   globals = [];
   tables = [];
@@ -246,6 +256,7 @@ let func_type_for (m : module_) (x : var) : func_type =
 let import_type (m : module_) (im : import) : extern_type =
   let {idesc; _} = im.it in
   match idesc.it with
+  | AbsTypeImport x -> ExternAbsType TODO
   | FuncImport x -> ExternFuncType (func_type_for m x)
   | TableImport t -> ExternTableType t
   | MemoryImport t -> ExternMemoryType t
@@ -256,6 +267,11 @@ let export_type (m : module_) (ex : export) : extern_type =
   let its = List.map (import_type m) m.it.imports in
   let open Lib.List32 in
   match edesc.it with
+  (* Start: Abstract Type *)
+  | AbsTypeExport x ->
+    let ats = abstypes its @  in
+    ExternAbsType (nth ats x.it)
+  (* End: Abstract Type *)
   | FuncExport x ->
     let fts =
       funcs its @ List.map (fun f -> func_type_for m f.it.ftype) m.it.funcs
