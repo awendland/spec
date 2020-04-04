@@ -72,8 +72,8 @@ let empty_types () = {space = empty (); list = []}
 
 (* Start: Abstract Types *)
 (* NOTE: because SealedAbsType is a value_type, this approach supports both within module and external abstract types *)
-type abstypes = {space : space; mutable list : value_type list} 
-let empty_abstypes () : abstypes = {space = empty (); list = []}
+type new_abstypes = {space : space; mutable list : value_type list} 
+let empty_new_abstypes () : new_abstypes = {space = empty (); list = []}
 (* End: Abstract Types *)
 
 type context =
@@ -82,7 +82,8 @@ type context =
     data : space; elems : space;
     labels : int32 VarMap.t;
     (* Start: Abstract Types *)
-    abstypes : abstypes }
+    new_abstypes : new_abstypes;
+    sealed_abstypes : space }
     (* End: Abstract Types *)
 
 let empty_context () =
@@ -91,7 +92,8 @@ let empty_context () =
     data = empty (); elems = empty ();
     labels = VarMap.empty;
     (* Start: Abstract Types *)
-    abstypes = empty_abstypes () }
+    new_abstypes = empty_new_abstypes ();
+    sealed_abstypes = empty () }
     (* End: Abstract Types *)
 
 let enter_func (c : context) =
@@ -102,7 +104,7 @@ let lookup category space x =
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
 (* Start: Abstract Types *)
-let abstype (c : context) x = lookup "abstype" c.abstypes.space x
+let sealed_abstype (c : context) x = lookup "sealed abstype" c.sealed_abstypes x
 (* End: Abstract Types *)
 let type_ (c : context) x = lookup "type" c.types.space x
 let func (c : context) x = lookup "function" c.funcs x
@@ -115,6 +117,11 @@ let data (c : context) x = lookup "data segment" c.data x
 let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
+
+let unwrap_new_abstype (c : context) x =
+  let i = lookup "new abstype" c.new_abstype x in
+  try (Lib.List32.nth c.new_abstypes.list x.it)
+  with Failure _ -> error x.at ("unknown new abstype " ^ Int32.to_string x.it)
 
 let func_type (c : context) x =
   try (Lib.List32.nth c.types.list x.it).it
@@ -132,9 +139,10 @@ let bind category space x =
   i
 
 (* Start: Abstract Types *)
-let bind_abstype (c : context) x aty =
-  c.abstypes.list <- c.abstypes.list @ [aty];
-  bind "abstype" c.abstypes.space x
+let bind_new_abstype (c : context) x vt =
+  c.new_abstypes.list <- c.new_abstypes.list @ [vt];
+  bind "new abstype" c.new_abstypes.space x
+let bind_sealed_abstype (c : context) x = bind "sealed abstype" c.sealed_abstypes x
 (* End: Abstract Types *)
 let bind_type (c : context) x ty =
   c.types.list <- c.types.list @ [ty];
@@ -157,9 +165,10 @@ let anon category space n =
   i
 
 (* Start: Abstract Types *)
-let anon_abstype (c : context) ty =
-  c.abstypes.list <- c.abstypes.list @ [ty];
-  anon "abstype" c.abstypes.space 1l
+let anon_new_abstype (c : context) vt =
+  c.new_abstypes.list <- c.new_abstypes.list @ [vt];
+  anon "new abstype" c.new_abstypes.space 1l
+let anon_sealed_abstype (c : context) x = anon "sealed abstype" c.sealed_abstypes 1l
 (* End: Abstract Types *)
 let anon_type (c : context) ty =
   c.types.list <- c.types.list @ [ty];
@@ -200,7 +209,7 @@ let inline_type_explicit (c : context) x ft at =
 %token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
 %token CONST UNARY BINARY TEST COMPARE CONVERT
 
-%token ABSTYPE_NEW ABSTYPE_ALIAS ABSTYPE_REF
+%token ABSTYPE_NEW ABSTYPE_NEW_REF ABSTYPE_SEALED ABSTYPE_SEALED_REF
 
 %token REF_ANY REF_NULL REF_FUNC REF_HOST REF_IS_NULL
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
@@ -259,41 +268,30 @@ ref_type :
   | FUNCREF { FuncRefType }
   | NULLREF { NullRefType }
 
+/* Start: Abstract Types */
 value_type :
   | NUM_TYPE { NumType $1 }
   | ref_type { RefType $1 }
-  /* Notice how SealedAbsType is not represented here. This is because
-     abstract type references are handled at a higher level (value_abs_type)
-     since they may be unwrapped into the underlying value_type directly
-     (such as if the abstract type is being used within its originating module).
-     SealedAbsType will be introduced during that unwrapping, if need be.
-   */
+  | LPAR ABSTYPE_SEALED_REF var RPAR { fun c -> SealedAbsType (sealed_abstype c $3) }
 
-/* Start: Abstract Types */
-/* TODO abstype_alias : */
+unwrapped_value_type :
+  | value_type { $1 }
+  | LPAR ABSTYPE_NEW_REF var RPAR { fun c -> unwrap_new_abstype c $3 }
+
+unwrapped_value_type_list :
+  | /* empty */ { [] }
+  | unwrapped_value_type unwrapped_value_type_list { $1 :: $2 }
 
 abstype_new :
   | LPAR ABSTYPE_NEW value_type_or_abstype RPAR
-    { fun c -> anon_abstype c $3 }
+    { fun c -> anon_new_abstype c $3 }
   | LPAR ABSTYPE_NEW bind_var value_type_or_abstype RPAR  /* Sugar */
-    { fun c -> bind_abstype c $3 $4 }
-  /* TODO support imported abstypes */
-
-abstype_ref :
-  | LPAR ABSTYPE_REF var RPAR { $3 }
-
-value_or_abs_type :
-  | value_type { $1 }
-  | abstype_ref { fun c -> abstype c $1 }
-
-value_or_abs_type_list :
-  | /* empty */ { [] }
-  | value_or_abs_type value_or_abs_type_list { $1 :: $2 }
+    { fun c -> bind_new_abstype c $3 $4 }
 /* End: Abstract Types */
 
 global_type :
-  | value_or_abs_type { GlobalType ($1, Immutable) }
-  | LPAR MUT value_or_abs_type RPAR { GlobalType ($3, Mutable) }
+  | unwrapped_value_type { GlobalType ($1, Immutable) }
+  | LPAR MUT unwrapped_value_type RPAR { GlobalType ($3, Mutable) }
 
 def_type :
   | LPAR FUNC func_type RPAR { $3 }
@@ -301,13 +299,13 @@ def_type :
 func_type :
   | /* empty */
     { FuncType ([], []) }
-  | LPAR RESULT value_or_abs_type_list RPAR func_type
+  | LPAR RESULT unwrapped_value_type_list RPAR func_type
     { let FuncType (ins, out) = $5 in
       if ins <> [] then error (at ()) "result before parameter";
       FuncType (ins, $3 @ out) }
-  | LPAR PARAM value_or_abs_type_list RPAR func_type
+  | LPAR PARAM unwrapped_value_type_list RPAR func_type
     { let FuncType (ins, out) = $5 in FuncType ($3 @ ins, out) }
-  | LPAR PARAM bind_var value_or_abs_type RPAR func_type  /* Sugar */
+  | LPAR PARAM bind_var unwrapped_value_type RPAR func_type  /* Sugar */
     { let FuncType (ins, out) = $6 in FuncType ($4 :: ins, out) }
 
 table_type :
@@ -441,7 +439,7 @@ select_instr :
       select (if b then (Some ts) else None) @@ at }
 
 select_instr_results :
-  | LPAR RESULT value_or_abs_type_list RPAR select_instr_results
+  | LPAR RESULT unwrapped_value_type_list RPAR select_instr_results
     { let _, ts = $5 in true, $3 @ ts }
   | /* empty */
     { false, [] }
@@ -453,7 +451,7 @@ select_instr_instr :
       select (if b then (Some ts) else None) @@ at1, es }
 
 select_instr_results_instr :
-  | LPAR RESULT value_or_abs_type_list RPAR select_instr_results_instr
+  | LPAR RESULT unwrapped_value_type_list RPAR select_instr_results_instr
     { fun c -> let _, ts, es = $5 c in true, $3 @ ts, es }
   | instr
     { fun c -> false, [], $1 c }
@@ -476,13 +474,13 @@ call_instr_type :
     { let at = at () in fun c -> inline_type c ($1 c) at }
 
 call_instr_params :
-  | LPAR PARAM value_or_abs_type_list RPAR call_instr_params
+  | LPAR PARAM unwrapped_value_type_list RPAR call_instr_params
     { fun c -> let FuncType (ts1, ts2) = $5 c in FuncType ($3 @ ts1, ts2) }
   | call_instr_results
     { fun c -> FuncType ([], $1 c) }
 
 call_instr_results :
-  | LPAR RESULT value_or_abs_type_list RPAR call_instr_results
+  | LPAR RESULT unwrapped_value_type_list RPAR call_instr_results
     { fun c -> $3 @ $5 c }
   | /* empty */
     { fun c -> [] }
@@ -508,14 +506,14 @@ call_instr_type_instr :
       fun c -> let ft, es = $1 c in inline_type c ft at, es }
 
 call_instr_params_instr :
-  | LPAR PARAM value_or_abs_type_list RPAR call_instr_params_instr
+  | LPAR PARAM unwrapped_value_type_list RPAR call_instr_params_instr
     { fun c ->
       let FuncType (ts1, ts2), es = $5 c in FuncType ($3 @ ts1, ts2), es }
   | call_instr_results_instr
     { fun c -> let ts, es = $1 c in FuncType ([], ts), es }
 
 call_instr_results_instr :
-  | LPAR RESULT value_or_abs_type_list RPAR call_instr_results_instr
+  | LPAR RESULT unwrapped_value_type_list RPAR call_instr_results_instr
     { fun c -> let ts, es = $5 c in $3 @ ts, es }
   | instr
     { fun c -> [], $1 c }
@@ -562,7 +560,7 @@ expr1 :  /* Sugar */
       let ts, (es, es1, es2) = $3 c c' in es, if_ ts es1 es2 }
 
 select_expr_results :
-  | LPAR RESULT value_or_abs_type_list RPAR select_expr_results
+  | LPAR RESULT unwrapped_value_type_list RPAR select_expr_results
     { fun c -> let _, ts, es = $5 c in true, $3 @ ts, es }
   | expr_list
     { fun c -> false, [], $1 c }
@@ -579,14 +577,14 @@ call_expr_type :
       fun c -> let ft, es = $1 c in inline_type c ft at1, es }
 
 call_expr_params :
-  | LPAR PARAM value_or_abs_type_list RPAR call_expr_params
+  | LPAR PARAM unwrapped_value_type_list RPAR call_expr_params
     { fun c ->
       let FuncType (ts1, ts2), es = $5 c in FuncType ($3 @ ts1, ts2), es }
   | call_expr_results
     { fun c -> let ts, es = $1 c in FuncType ([], ts), es }
 
 call_expr_results :
-  | LPAR RESULT value_or_abs_type_list RPAR call_expr_results
+  | LPAR RESULT unwrapped_value_type_list RPAR call_expr_results
     { fun c -> let ts, es = $5 c in $3 @ ts, es }
   | expr_list
     { fun c -> [], $1 c }
@@ -653,19 +651,19 @@ func_fields :
 
 func_fields_import :  /* Sugar */
   | func_fields_import_result { $1 }
-  | LPAR PARAM value_or_abs_type_list RPAR func_fields_import
+  | LPAR PARAM unwrapped_value_type_list RPAR func_fields_import
     { let FuncType (ins, out) = $5 in FuncType ($3 @ ins, out) }
   | LPAR PARAM bind_var value_or_abs_type RPAR func_fields_import  /* Sugar */
     { let FuncType (ins, out) = $6 in FuncType ($4 :: ins, out) }
 
 func_fields_import_result :  /* Sugar */
   | /* empty */ { FuncType ([], []) }
-  | LPAR RESULT value_or_abs_type_list RPAR func_fields_import_result
+  | LPAR RESULT unwrapped_value_type_list RPAR func_fields_import_result
     { let FuncType (ins, out) = $5 in FuncType (ins, $3 @ out) }
 
 func_fields_body :
   | func_result_body { $1 }
-  | LPAR PARAM value_or_abs_type_list RPAR func_fields_body
+  | LPAR PARAM unwrapped_value_type_list RPAR func_fields_body
     { let FuncType (ins, out) = fst $5 in
       FuncType ($3 @ ins, out),
       fun c -> ignore (anon_locals c $3); snd $5 c }
@@ -676,7 +674,7 @@ func_fields_body :
 
 func_result_body :
   | func_body { FuncType ([], []), $1 }
-  | LPAR RESULT value_or_abs_type_list RPAR func_result_body
+  | LPAR RESULT unwrapped_value_type_list RPAR func_result_body
     { let FuncType (ins, out) = fst $5 in
       FuncType (ins, $3 @ out), snd $5 }
 
@@ -684,7 +682,7 @@ func_body :
   | instr_list
     { fun c -> let c' = anon_label c in
       {ftype = -1l @@ at(); locals = []; body = $1 c'} }
-  | LPAR LOCAL value_or_abs_type_list RPAR func_body
+  | LPAR LOCAL unwrapped_value_type_list RPAR func_body
     { fun c -> ignore (anon_locals c $3); let f = $5 c in
       {f with locals = $3 @ f.locals} }
   | LPAR LOCAL bind_var value_or_abs_type RPAR func_body  /* Sugar */
@@ -857,8 +855,8 @@ global_fields :
 
 import_desc :
   /* Start: Abstract Types */
-  | LPAR ABSTYPE_ALIAS bind_var_opt RPAR
-    { fun c -> ignore ($3 c anon_abstype bind_abstype);
+  | LPAR ABSTYPE_SEALED bind_var_opt RPAR
+    { fun c -> ignore ($3 c anon_sealed_abstype bind_sealed_abstype);
       func () -> AbsTypeImport () }
   /* End: Abstract Types */
   | LPAR FUNC bind_var_opt type_use RPAR
@@ -877,7 +875,6 @@ import_desc :
   | LPAR GLOBAL bind_var_opt global_type RPAR
     { fun c -> ignore ($3 c anon_global bind_global);
       fun () -> GlobalImport $4 }
-  /* TODO add abstract type import support */
 
 import :
   | LPAR IMPORT name name import_desc RPAR
@@ -890,9 +887,7 @@ inline_import :
 
 export_desc :
   /* Start: Abstract Types */
-  | LPAR ABSTYPE_REF var RPAR { fun c -> AbsTypeExport ($3 c abstype) }
-  /* TODO: seal abstract type */
-  /* TODO: look at how FuncExport is used and ExternFunc */
+  | LPAR abstype_new RPAR { fun c -> AbsTypeExport ($2 c) }
   /* End: Abstract Types */
   | LPAR FUNC var RPAR { fun c -> FuncExport ($3 c func) }
   | LPAR TABLE var RPAR { fun c -> TableExport ($3 c table) }
@@ -932,10 +927,6 @@ module_fields :
 module_fields1 :
   | type_def module_fields
     { fun c -> ignore ($1 c); $2 c }
-  (* Start: Abstract Types *)
-  | abstype_new module_fields
-    { fun c -> ignore ($1 c); $2 c }
-  (* End: Abstract Types *)
   | global module_fields
     { fun c -> let gf = $1 c in let mf = $2 c in
       fun () -> let globs, ims, exs = gf () in let m = mf () in
