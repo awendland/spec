@@ -21,7 +21,47 @@
   (export "TokenAlias" (abstype_ref $Token))
 )
 (register "MOD_1" $MOD_1)
+;; module_ of MOD_1
+;;  .types = [ ;; func_type Source.phrase
+;;    { it = ([i32], [i32]), ... };
+;;    { it = ([i32], []), ... };
+;;  ]
+;;  .exports = [ ;; export_desc' Source.phrase
+;;    ("Token",       AbsTypeExport 0);
+;;    ("TokenAlias",  AbsTypeExport 0)
+;;    ("createToken", FuncExport 0/$createToken);
+;;    ("useToken",    ExternAbsType 1/$useToken)
+;;  ]
+;;
+;; inst of MOD_1
+;;  .types = [ ;; func_type (no Source.phrase)
+;;    ([i32], [i32]);
+;;    ([i32], []);
+;;  ]
+;;  .exports = [
+;;    ("Token",       ExternAbsType 0);
+;;    ("TokenAlias",  ExternAbsType 0)
+;;    ("createToken", ExternFunc (([i32], [i32]), inst of MOD_1, ast#func0))
+;;    ("useToken",    ExternFunc (([i32], []), inst of MOD_1, ast#func1))
+;;    ;; ExternFunc func_inst = (func_type * module_inst ref * Ast.func))
+;;  ]
 
+;; module of MOD_2
+;;  .imports = [
+;;    {"MOD_1", "Token",      AbsTypeImport};
+;;    {"MOD_1", "TokenAlias", AbsTypeImport};
+;;    {"MOD_1", "createToken", FuncImport 0};
+;;    {"MOD_1", "createToken", FuncImport 1}
+;;  ]
+;;  .types = [
+;;    ([i32], [SealedAbsType ?]);
+;;    ([SealedAbsType ?], [])
+;;  ]
+;;  \ match_extern_type
+;;    "createToken":
+;;      import_type (FuncImport 0) -> ExternFuncType ([i32], [SealedAbsType ?])
+;;      extern_type_of MOD_1.exports["createToken"] -> ExternFuncType ([i32], [i32])
+;;
 (module
   (import "MOD_1" "Token" (abstype_sealed (;0;)))
   (import "MOD_1" "TokenAlias" (abstype_sealed $TokenAlias))
@@ -36,6 +76,9 @@
   )
 )
 
+;; TODO create global, local demos
+
+;; TODO outdated
 (assert_trap 
   (module
     (import "MOD_1" "A" (abstype_sealed $A))
