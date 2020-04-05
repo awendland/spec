@@ -104,6 +104,7 @@ let lookup category space x =
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
 (* Start: Abstract Types *)
+let new_abstype (c : context) x = lookup "new abstype" c.new_abstypes.space x
 let sealed_abstype (c : context) x = lookup "sealed abstype" c.sealed_abstypes x
 (* End: Abstract Types *)
 let type_ (c : context) x = lookup "type" c.types.space x
@@ -118,9 +119,8 @@ let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
 
-let unwrap_new_abstype (c : context) x =
-  let i = lookup "new abstype" c.new_abstype x in
-  try (Lib.List32.nth c.new_abstypes.list x.it)
+let unwrap_new_abstype (c : context) i =
+  try (Lib.List32.nth c.new_abstypes.list i)
   with Failure _ -> error x.at ("unknown new abstype " ^ Int32.to_string x.it)
 
 let func_type (c : context) x =
@@ -282,6 +282,16 @@ unwrapped_value_type_list :
   | /* empty */ { [] }
   | unwrapped_value_type unwrapped_value_type_list { $1 :: $2 }
 
+wrapped_value_type :
+  | value_type { RawValueType ($1) }
+  | LPAR ABSTYPE_NEW_REF var RPAR
+    { let i = $3 c new_abstype in
+      fun c -> NewAbsType (unwrap_new_abstype c i, i) }
+
+wrapped_value_type_list :
+  | /* empty */ { [] }
+  | wrapped_value_type wrapped_value_type_list { $1 :: $2 }
+
 abstype_new :
   | LPAR ABSTYPE_NEW value_type_or_abstype RPAR
     { fun c -> anon_new_abstype c $3 }
@@ -299,13 +309,13 @@ def_type :
 func_type :
   | /* empty */
     { FuncType ([], []) }
-  | LPAR RESULT unwrapped_value_type_list RPAR func_type
+  | LPAR RESULT wrapped_value_type_list RPAR func_type
     { let FuncType (ins, out) = $5 in
       if ins <> [] then error (at ()) "result before parameter";
       FuncType (ins, $3 @ out) }
-  | LPAR PARAM unwrapped_value_type_list RPAR func_type
+  | LPAR PARAM wrapped_value_type_list RPAR func_type
     { let FuncType (ins, out) = $5 in FuncType ($3 @ ins, out) }
-  | LPAR PARAM bind_var unwrapped_value_type RPAR func_type  /* Sugar */
+  | LPAR PARAM bind_var wrapped_value_type RPAR func_type  /* Sugar */
     { let FuncType (ins, out) = $6 in FuncType ($4 :: ins, out) }
 
 table_type :
@@ -474,13 +484,13 @@ call_instr_type :
     { let at = at () in fun c -> inline_type c ($1 c) at }
 
 call_instr_params :
-  | LPAR PARAM unwrapped_value_type_list RPAR call_instr_params
+  | LPAR PARAM wrapped_value_type_list RPAR call_instr_params
     { fun c -> let FuncType (ts1, ts2) = $5 c in FuncType ($3 @ ts1, ts2) }
   | call_instr_results
     { fun c -> FuncType ([], $1 c) }
 
 call_instr_results :
-  | LPAR RESULT unwrapped_value_type_list RPAR call_instr_results
+  | LPAR RESULT wrapped_value_type_list RPAR call_instr_results
     { fun c -> $3 @ $5 c }
   | /* empty */
     { fun c -> [] }
@@ -506,14 +516,14 @@ call_instr_type_instr :
       fun c -> let ft, es = $1 c in inline_type c ft at, es }
 
 call_instr_params_instr :
-  | LPAR PARAM unwrapped_value_type_list RPAR call_instr_params_instr
+  | LPAR PARAM wrapped_value_type_list RPAR call_instr_params_instr
     { fun c ->
       let FuncType (ts1, ts2), es = $5 c in FuncType ($3 @ ts1, ts2), es }
   | call_instr_results_instr
     { fun c -> let ts, es = $1 c in FuncType ([], ts), es }
 
 call_instr_results_instr :
-  | LPAR RESULT unwrapped_value_type_list RPAR call_instr_results_instr
+  | LPAR RESULT wrapped_value_type_list RPAR call_instr_results_instr
     { fun c -> let ts, es = $5 c in $3 @ ts, es }
   | instr
     { fun c -> [], $1 c }
@@ -577,14 +587,14 @@ call_expr_type :
       fun c -> let ft, es = $1 c in inline_type c ft at1, es }
 
 call_expr_params :
-  | LPAR PARAM unwrapped_value_type_list RPAR call_expr_params
+  | LPAR PARAM wrapped_value_type_list RPAR call_expr_params
     { fun c ->
       let FuncType (ts1, ts2), es = $5 c in FuncType ($3 @ ts1, ts2), es }
   | call_expr_results
     { fun c -> let ts, es = $1 c in FuncType ([], ts), es }
 
 call_expr_results :
-  | LPAR RESULT unwrapped_value_type_list RPAR call_expr_results
+  | LPAR RESULT wrapped_value_type_list RPAR call_expr_results
     { fun c -> let ts, es = $5 c in $3 @ ts, es }
   | expr_list
     { fun c -> [], $1 c }
@@ -651,19 +661,19 @@ func_fields :
 
 func_fields_import :  /* Sugar */
   | func_fields_import_result { $1 }
-  | LPAR PARAM unwrapped_value_type_list RPAR func_fields_import
+  | LPAR PARAM wrapped_value_type_list RPAR func_fields_import
     { let FuncType (ins, out) = $5 in FuncType ($3 @ ins, out) }
   | LPAR PARAM bind_var value_or_abs_type RPAR func_fields_import  /* Sugar */
     { let FuncType (ins, out) = $6 in FuncType ($4 :: ins, out) }
 
 func_fields_import_result :  /* Sugar */
   | /* empty */ { FuncType ([], []) }
-  | LPAR RESULT unwrapped_value_type_list RPAR func_fields_import_result
+  | LPAR RESULT wrapped_value_type_list RPAR func_fields_import_result
     { let FuncType (ins, out) = $5 in FuncType (ins, $3 @ out) }
 
 func_fields_body :
   | func_result_body { $1 }
-  | LPAR PARAM unwrapped_value_type_list RPAR func_fields_body
+  | LPAR PARAM wrapped_value_type_list RPAR func_fields_body
     { let FuncType (ins, out) = fst $5 in
       FuncType ($3 @ ins, out),
       fun c -> ignore (anon_locals c $3); snd $5 c }
@@ -674,7 +684,7 @@ func_fields_body :
 
 func_result_body :
   | func_body { FuncType ([], []), $1 }
-  | LPAR RESULT unwrapped_value_type_list RPAR func_result_body
+  | LPAR RESULT wrapped_value_type_list RPAR func_result_body
     { let FuncType (ins, out) = fst $5 in
       FuncType (ins, $3 @ out), snd $5 }
 
@@ -682,7 +692,7 @@ func_body :
   | instr_list
     { fun c -> let c' = anon_label c in
       {ftype = -1l @@ at(); locals = []; body = $1 c'} }
-  | LPAR LOCAL unwrapped_value_type_list RPAR func_body
+  | LPAR LOCAL wrapped_value_type_list RPAR func_body
     { fun c -> ignore (anon_locals c $3); let f = $5 c in
       {f with locals = $3 @ f.locals} }
   | LPAR LOCAL bind_var value_or_abs_type RPAR func_body  /* Sugar */

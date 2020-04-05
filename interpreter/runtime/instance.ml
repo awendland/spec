@@ -3,7 +3,7 @@ open Types
 type module_inst =
 {
   new_abstypes : value_type list;
-  (* See add_import handling in todo-abstract-types.wast *)
+  (* TODO see add_import handling in todo-abstract-types.wast *)
   sealed_abstypes : sealed_abstype_inst list;
   types : func_type list;
   funcs : func_inst list;

@@ -9,7 +9,11 @@ type value_type =
   | SealedAbsType of int32
   (* End: Abstract Types *)
   | BotType
-type stack_type = value_type list
+
+type wrapped_value_type =
+  | RawValueType of value_type
+  | NewAbsType of value_type * int32
+type stack_type = wrapped_value_type list
 type func_type = FuncType of stack_type * stack_type
 
 type 'a limits = {min : 'a; max : 'a option}
@@ -17,15 +21,6 @@ type mutability = Immutable | Mutable
 type table_type = TableType of Int32.t limits * ref_type
 type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
-type extern_type =
-  (* Start: Abstract Types *)
-  (* the int32 represents the id of the abstract type within the module *)
-  | ExternAbsType of int32 (* TODO does this need an int field like SealedAbsType? *)
-  (* End: Abstract Types *)
-  | ExternFuncType of func_type
-  | ExternTableType of table_type
-  | ExternMemoryType of memory_type
-  | ExternGlobalType of global_type
 
 
 (* Attributes *)
@@ -46,9 +41,6 @@ let match_ref_type t1 t2 =
   | NullRefType, _ -> true
   | _, _ -> t1 = t2
 
-
-(* TODO does this need the module instance or some context to determine
-   if two SealedAbsTypes are equivalent? *)
 let match_value_type t1 t2 =
   match t1, t2 with
   | NumType t1', NumType t2' -> match_num_type t1' t2'
@@ -66,7 +58,8 @@ let match_limits lim1 lim2 =
   | None, Some _ -> false
   | Some i, Some j -> I32.le_u i j
 
-let match_func_type ft1 ft2 =
+(* TODO this should probably be removed *)
+let match_local_func_type ft1 ft2 =
   ft1 = ft2
 
 let match_table_type (TableType (lim1, et1)) (TableType (lim2, et2)) =
@@ -78,19 +71,6 @@ let match_memory_type (MemoryType lim1) (MemoryType lim2) =
 let match_global_type (GlobalType (t1, mut1)) (GlobalType (t2, mut2)) =
   mut1 = mut2 &&
   (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
-
-let match_extern_type et1 et2 =
-  match et1, et2 with
-  (* Start: Abstract Types *)
-  (* this doesn't make sense. The importing module has no idea what
-     the "type" of the abstract type is. It's just importing it blindly. *)
-  | ExternAbsType at1, ExternAbsType at1 -> TODO 
-  (* Start: Abstract Types *)
-  | ExternFuncType ft1, ExternFuncType ft2 -> match_func_type ft1 ft2
-  | ExternTableType tt1, ExternTableType tt2 -> match_table_type tt1 tt2
-  | ExternMemoryType mt1, ExternMemoryType mt2 -> match_memory_type mt1 mt2
-  | ExternGlobalType gt1, ExternGlobalType gt2 -> match_global_type gt1 gt2
-  | _, _ -> false
 
 let is_num_type = function
   | NumType _ | BotType -> true
