@@ -181,7 +181,9 @@ let rec step (c : config) : config =
         vs, [Invoke (func frame.inst x) @@ e.at]
 
       | CallIndirect (x, y), Num (I32 i) :: vs ->
+        (* TODO handle abstract types *)
         let func = func_ref frame.inst x i e.at in
+        (* if not (match_func_type (type_ frame.inst y) (Func.type_of func)) then *)
         if type_ frame.inst y <> Func.type_of func then
           vs, [Trapping "indirect call type mismatch" @@ e.at]
         else
@@ -534,6 +536,7 @@ let invoke (func : func_inst) (vs : value list) : value list =
   let FuncType (ins, out) = Func.type_of func in
   if List.length vs <> List.length ins then
     Crash.error at "wrong number of arguments";
+  (* TODO handle abstract types *)
   if not (List.for_all2 (fun v -> match_value_type (type_of_value v)) vs ins) then
     Crash.error at "wrong types of arguments";
   let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
@@ -569,6 +572,8 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
   let {name; edesc} = ex.it in
   let ext =
     match edesc.it with
+    (* TODO: I think this is where an AbsType should be given an ID and sealed *)
+    (* | AbsTypeExport x -> ExternAbsType x.it *)
     | FuncExport x -> ExternFunc (func inst x)
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
@@ -586,12 +591,10 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
 
 let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
   : module_inst =
+  (* TODO handle abstract types *)
   if not (match_extern_type (extern_type_of ext) (import_type m im)) then
     Link.error im.at "incompatible import type";
   match ext with
-  (* Start: Abstract Types *)
-  | ExternAbsTypeInst uid -> {inst with abstypes = TODO :: inst.abstypes}
-  (* End: Abstract Types *)
   | ExternFunc func -> {inst with funcs = func :: inst.funcs}
   | ExternTable tab -> {inst with tables = tab :: inst.tables}
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}

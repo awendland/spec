@@ -6,7 +6,7 @@ type value_type =
   | NumType of num_type
   | RefType of ref_type
   (* Start: Abstract Types *)
-  | SealedAbsType of int
+  | SealedAbsType of int32
   (* End: Abstract Types *)
   | BotType
 type stack_type = value_type list
@@ -19,7 +19,8 @@ type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
 type extern_type =
   (* Start: Abstract Types *)
-  | ExternAbsType of int (* TODO does this need an int field like SealedAbsType? *)
+  (* the int32 represents the id of the abstract type within the module *)
+  | ExternAbsType of int32 (* TODO does this need an int field like SealedAbsType? *)
   (* End: Abstract Types *)
   | ExternFuncType of func_type
   | ExternTableType of table_type
@@ -45,6 +46,9 @@ let match_ref_type t1 t2 =
   | NullRefType, _ -> true
   | _, _ -> t1 = t2
 
+
+(* TODO does this need the module instance or some context to determine
+   if two SealedAbsTypes are equivalent? *)
 let match_value_type t1 t2 =
   match t1, t2 with
   | NumType t1', NumType t2' -> match_num_type t1' t2'

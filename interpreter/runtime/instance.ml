@@ -2,6 +2,9 @@ open Types
 
 type module_inst =
 {
+  new_abstypes : value_type list;
+  (* See add_import handling in todo-abstract-types.wast *)
+  sealed_abstypes : sealed_abstype_inst list;
   types : func_type list;
   funcs : func_inst list;
   tables : table_inst list;
@@ -12,6 +15,11 @@ type module_inst =
   datas : data_inst list;
 }
 
+(* Have the parser create Ast.name * Ast.name, and then have the
+   typechecking occur on the reference? No point in that, because the
+   reference will just be derived from the name anyways. *)
+(* and sealed_abstype_inst = Ast.name * Ast.name (* Module name, Export name *) *)
+and sealed_abstype_inst = module_inst ref * int32
 and func_inst = module_inst ref Func.t
 and table_inst = Table.t
 and memory_inst = Memory.t
@@ -22,7 +30,7 @@ and data_inst = string ref
 
 and extern =
   (* Start: Abstract Type *)
-  | ExternAbsTypeInst of int
+  (* | ExternAbsTypeInst of sealed_abstype_inst *)
   (* End: Abstract Type *)
   | ExternFunc of func_inst
   | ExternTable of table_inst
@@ -55,7 +63,7 @@ let empty_module_inst =
 
 let extern_type_of = function
   (* Start: Abstract Types *)
-  | ExternAbsTypeInst uid -> ExternAbsType uid
+  (* | ExternAbsTypeInst uid -> ExternAbsType uid *)
   (* End: Abstract Types *)
   | ExternFunc func -> ExternFuncType (Func.type_of func)
   | ExternTable tab -> ExternTableType (Table.type_of tab)

@@ -90,6 +90,7 @@ let stack ts = (NoEllipses, ts)
 let (-->) ts1 ts2 = {ins = NoEllipses, ts1; outs = NoEllipses, ts2}
 let (-->...) ts1 ts2 = {ins = Ellipses, ts1; outs = Ellipses, ts2}
 
+(* TODO maybe handle abstract types *)
 let check_stack ts1 ts2 at =
   require
     (List.length ts1 = List.length ts2 && List.for_all2 match_value_type ts1 ts2) at
@@ -410,6 +411,7 @@ and check_seq (c : context) (es : instr list) : infer_stack_type =
 and check_block (c : context) (es : instr list) (ts : stack_type) at =
   let s = check_seq c es in
   let s' = pop (stack ts) s at in
+  (* TODO maybe handle abstract types *)
   require (snd s' = []) at
     ("type mismatch: operator requires " ^ string_of_stack_type ts ^
      " but stack has " ^ string_of_stack_type (snd s))
@@ -432,6 +434,7 @@ let check_num_type (t : num_type) at =
 let check_ref_type (t : ref_type) at =
   ()
 
+(* TODO maybe handle abstract types *)
 let check_value_type (t : value_type) at =
   match t with
   | NumType t' -> check_num_type t' at
@@ -441,6 +444,7 @@ let check_value_type (t : value_type) at =
   (* End: Abstract Types *)
   | BotType -> ()
 
+(* TODO maybe handle abstract types *)
 let check_func_type (ft : func_type) at =
   let FuncType (ins, out) = ft in
   List.iter (fun t -> check_value_type t at) ins;
@@ -457,6 +461,7 @@ let check_memory_type (mt : memory_type) at =
   check_limits lim 0x1_0000L at
     "memory size must be at most 65536 pages (4GiB)"
 
+(* TODO maybe handle abstract types *)
 let check_global_type (gt : global_type) at =
   let GlobalType (t, mut) = gt in
   check_value_type t at
@@ -476,6 +481,7 @@ let check_global_type (gt : global_type) at =
  *   x : variable
  *)
 
+O(* TODO maybe handle abstract types *)
 let check_type (t : type_) =
   check_func_type t.it t.at
 

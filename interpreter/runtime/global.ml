@@ -20,5 +20,6 @@ let load glob =
 let store glob v =
   let GlobalType (t, mut) = glob.ty in
   if mut <> Mutable then raise NotMutable;
+  (* TODO support abstract types *)
   if not (match_value_type (type_of_value v) t) then raise Type;
   glob.content <- v

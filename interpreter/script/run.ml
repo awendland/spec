@@ -331,6 +331,7 @@ let run_action act : Values.value list =
   | Invoke (x_opt, name, vs) ->
     trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
     let inst = lookup_instance x_opt act.at in
+    (* TODO how should abstract types be handled? *)
     (match Instance.export inst name with
     | Some (Instance.ExternFunc f) ->
       let Types.FuncType (ins, out) = Func.type_of f in
