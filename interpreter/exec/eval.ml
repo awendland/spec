@@ -647,8 +647,11 @@ let init (m : module_) (exts : extern list) : module_inst =
   if List.length exts <> List.length imports then
     Link.error m.at "wrong number of imports provided for initialisation";
   let inst0 =
-    { (List.fold_right2 add_import exts imports empty_module_inst) with
-      types = List.map (fun type_ -> type_.it) types }
+    let inst_types =
+      { empty_module_inst with
+        types = List.map (fun type_ -> type_.it) types }
+    in
+    (List.fold_right2 add_import exts imports inst_types)
   in
   let fs = List.map (create_func inst0) funcs in
   let inst1 = {inst0 with funcs = inst0.funcs @ fs} in
