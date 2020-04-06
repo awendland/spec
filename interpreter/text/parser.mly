@@ -641,13 +641,13 @@ func :
 
 func_fields :
   | type_use func_fields_body
-    { fun c x at ->
-      let t = inline_type_explicit c ($1 c type_) (fst ($2 c)) at in
-      [{(snd ($2 c) (enter_func c)) with ftype = t} @@ at], [], [] }
+    { fun c x at -> let ffb = $2 c in
+      let t = inline_type_explicit c ($1 c type_) (fst ffb) at in
+      [{(snd ffb (enter_func c)) with ftype = t} @@ at], [], [] }
   | func_fields_body  /* Sugar */
-    { fun c x at ->
-      let t = inline_type c (fst ($1 c)) at in
-      [{(snd ($1 c) (enter_func c)) with ftype = t} @@ at], [], [] }
+    { fun c x at -> let ffb = $1 c in
+      let t = inline_type c (fst ffb) at in
+      [{(snd ffb (enter_func c)) with ftype = t} @@ at], [], [] }
   | inline_import type_use func_fields_import  /* Sugar */
     { fun c x at ->
       let t = inline_type_explicit c ($2 c type_) ($3 c) at in
@@ -679,13 +679,15 @@ func_fields_import_result :  /* Sugar */
 func_fields_body :
   | func_result_body { fun c -> $1 c }
   | LPAR PARAM wrapped_value_type_list RPAR func_fields_body
-    { fun c -> let FuncType (ins, out) = fst ($5 c) in
-      ignore (anon_locals c (unwrap_stack ($3 c)));
-      FuncType ($3 c @ ins, out), snd ($5 c) }
+    { fun c -> let ffb = $5 c in
+      let FuncType (ins, out) = fst ffb in
+      FuncType ($3 c @ ins, out),
+      fun c' -> ignore (anon_locals c' (unwrap_stack ($3 c))); snd ffb c' }
   | LPAR PARAM bind_var wrapped_value_type RPAR func_fields_body  /* Sugar */
-    { fun c -> let FuncType (ins, out) = fst ($6 c) in
-      ignore (bind_local c $3);
-      FuncType ($4 c :: ins, out), snd ($6 c) }
+    { fun c -> let ffb = $6 c in
+      let FuncType (ins, out) = fst ffb in
+      FuncType ($4 c :: ins, out),
+      fun c' -> ignore (bind_local c' $3); snd ffb c' }
 
 func_result_body :
   | func_body { fun c -> FuncType ([], []), $1 }
