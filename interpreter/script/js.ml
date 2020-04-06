@@ -2,6 +2,13 @@ open Types
 open Ast
 open Script
 open Source
+open Extern_types
+
+
+(* Abstract Types *)
+
+let raise_no_abstypes at = 
+  raise (Eval.Crash (at, "abstract types are not (yet) supported in JS"))
 
 
 (* Harness *)
@@ -176,12 +183,12 @@ function assert_return(action, expected) {
 module NameMap = Map.Make(struct type t = Ast.name let compare = compare end)
 module Map = Map.Make(String)
 
-type exports = extern_type NameMap.t
+type exports = unresolved_extern_type NameMap.t
 type modules = {mutable env : exports Map.t; mutable current : int}
 
 let exports m : exports =
   List.fold_left
-    (fun map exp -> NameMap.add exp.it.name (export_type m exp) map)
+    (fun map exp -> NameMap.add exp.it.name (unresolved_export_type m exp) map)
     NameMap.empty m.it.exports
 
 let modules () : modules = {env = Map.empty; current = 0}
@@ -315,11 +322,12 @@ let wrap item_name wrap_action wrap_assertion at =
   let itypes, idesc, action = wrap_action at in
   let locals, assertion = wrap_assertion at in
   let types =
+    let open Types_shorthand in
     (FuncType ([], []) @@ at) ::
-    (FuncType ([NumType I32Type], [RefType AnyRefType]) @@ at) ::
-    (FuncType ([RefType AnyRefType], [NumType I32Type]) @@ at) ::
-    (FuncType ([RefType AnyRefType], [NumType I32Type]) @@ at) ::
-    (FuncType ([RefType AnyRefType; RefType AnyRefType], [NumType I32Type]) @@ at) ::
+    (FuncType ([r (NumType I32Type)], [r (RefType AnyRefType)]) @@ at) ::
+    (FuncType ([r (RefType AnyRefType)], [r (NumType I32Type)]) @@ at) ::
+    (FuncType ([r (RefType AnyRefType)], [r (NumType I32Type)]) @@ at) ::
+    (FuncType ([r (RefType AnyRefType); r (RefType AnyRefType)], [r (NumType I32Type)]) @@ at) ::
     itypes
   in
   let imports =
@@ -354,16 +362,21 @@ let is_js_num_type = function
   | I32Type -> true
   | I64Type | F32Type | F64Type -> false
 
-let is_js_value_type = function
+let is_js_value_type at = function
   | NumType t -> is_js_num_type t
   | RefType t -> true
+  | SealedAbsType i -> raise_no_abstypes at
   | BotType -> assert false
 
-let is_js_global_type = function
-  | GlobalType (t, mut) -> is_js_value_type t && mut = Immutable
+let is_js_wrapped_value_type at = function
+  | RawValueType vt -> is_js_value_type at vt
+  | NewAbsType _ -> raise_no_abstypes at
 
-let is_js_func_type = function
-  | FuncType (ins, out) -> List.for_all is_js_value_type (ins @ out)
+let is_js_global_type at = function
+  | GlobalType (t, mut) -> (is_js_value_type at) t && mut = Immutable
+
+let is_js_func_type at = function
+  | FuncType (ins, out) -> List.for_all (is_js_wrapped_value_type at) (ins @ out)
 
 
 (* Script conversion *)
@@ -446,7 +459,8 @@ let of_action mods act =
     "call(" ^ of_var_opt mods x_opt ^ ", " ^ of_name name ^ ", " ^
       "[" ^ String.concat ", " (List.map of_value vs) ^ "])",
     (match lookup mods x_opt name act.at with
-    | ExternFuncType ft when not (is_js_func_type ft) ->
+    | ExternFuncType (ExternFuncSigType (_, _, ft))
+      when not (is_js_func_type act.at ft) ->
       let FuncType (_, out) = ft in
       Some (of_wrapper mods x_opt name (invoke ft vs), out)
     | _ -> None
@@ -454,9 +468,9 @@ let of_action mods act =
   | Get (x_opt, name) ->
     "get(" ^ of_var_opt mods x_opt ^ ", " ^ of_name name ^ ")",
     (match lookup mods x_opt name act.at with
-    | ExternGlobalType gt when not (is_js_global_type gt) ->
+    | ExternGlobalType gt when not (is_js_global_type act.at gt) ->
       let GlobalType (t, _) = gt in
-      Some (of_wrapper mods x_opt name (get gt), [t])
+      Some (of_wrapper mods x_opt name (get gt), [RawValueType t])
     | _ -> None
     )
 

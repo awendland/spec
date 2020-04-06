@@ -72,9 +72,9 @@ and instr' =
   | Nop                               (* do nothing *)
   | Drop                              (* forget a value *)
   | Select of value_type list option  (* branchless conditional *)
-  | Block of stack_type * instr list  (* execute in sequence *)
-  | Loop of stack_type * instr list   (* loop header *)
-  | If of stack_type * instr list * instr list  (* conditional *)
+  | Block of raw_stack_type * instr list  (* execute in sequence *)
+  | Loop of raw_stack_type * instr list   (* loop header *)
+  | If of raw_stack_type * instr list * instr list  (* conditional *)
   | Br of var                         (* break to n-th surrounding label *)
   | BrIf of var                       (* conditional break *)
   | BrTable of var list * var         (* indexed break *)
@@ -175,9 +175,7 @@ type type_ = func_type Source.phrase
 
 type export_desc = export_desc' Source.phrase
 and export_desc' =
-  (* Start: Abstract Types *)
   | AbsTypeExport of var
-  (* End: Abstract Types *)
   | FuncExport of var
   | TableExport of var
   | MemoryExport of var
@@ -192,9 +190,7 @@ and export' =
 
 type import_desc = import_desc' Source.phrase
 and import_desc' =
-  (* Start: Abstract Types *)
-  | AbsTypeImport of var (* TODO driven by import_desc, import_type, match_extern_type *)
-  (* End: Abstract Types *)
+  | AbsTypeImport of var
   | FuncImport of var
   | TableImport of table_type
   | MemoryImport of memory_type

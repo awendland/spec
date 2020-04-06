@@ -242,7 +242,7 @@ let string_of_extern_func_type
 let annotation_of_extern_type
     (strabs : 'absref -> string)
     (et : 'absref extern_type) =
-  function
+  match et with
   | ExternAbsType t -> ("abstype", strabs t)
   | ExternFuncType t -> ("func", string_of_extern_func_type strabs t)
   | ExternTableType t -> ("table", string_of_table_type t)

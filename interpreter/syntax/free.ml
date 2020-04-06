@@ -107,8 +107,10 @@ let data (s : data_segment) =
 
 let type_ (t : type_) = empty
 
+(* TODO what do these functions do? *)
 let export_desc (d : export_desc) =
   match d.it with
+  | AbsTypeExport x -> empty
   | FuncExport x -> funcs (var x)
   | TableExport x -> tables (var x)
   | MemoryExport x -> memories (var x)
@@ -116,6 +118,7 @@ let export_desc (d : export_desc) =
 
 let import_desc (d : import_desc) =
   match d.it with
+  | AbsTypeImport x -> empty
   | FuncImport x -> types (var x)
   | TableImport tt -> empty
   | MemoryImport mt -> empty

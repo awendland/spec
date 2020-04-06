@@ -34,19 +34,19 @@ let print_value v =
 let print (FuncType (_, out)) vs =
   List.iter print_value vs;
   flush_all ();
-  List.map default_value out
-
+  List.map (fun v -> default_value (unwrap v)) out
 
 let lookup name t =
+  let open Types_shorthand in
   match Utf8.encode name, t with
   | "print", _ -> ExternFunc (func print (FuncType ([], [])))
-  | "print_i32", _ -> ExternFunc (func print (FuncType ([NumType I32Type], [])))
+  | "print_i32", _ -> ExternFunc (func print (FuncType ([r (NumType I32Type)], [])))
   | "print_i32_f32", _ ->
-    ExternFunc (func print (FuncType ([NumType I32Type; NumType F32Type], [])))
+    ExternFunc (func print (FuncType ([r (NumType I32Type); r (NumType F32Type)], [])))
   | "print_f64_f64", _ ->
-    ExternFunc (func print (FuncType ([NumType F64Type; NumType F64Type], [])))
-  | "print_f32", _ -> ExternFunc (func print (FuncType ([NumType F32Type], [])))
-  | "print_f64", _ -> ExternFunc (func print (FuncType ([NumType F64Type], [])))
+    ExternFunc (func print (FuncType ([r (NumType F64Type); r (NumType F64Type)], [])))
+  | "print_f32", _ -> ExternFunc (func print (FuncType ([r (NumType F32Type)], [])))
+  | "print_f64", _ -> ExternFunc (func print (FuncType ([r (NumType F64Type)], [])))
   | "global_i32", _ -> ExternGlobal (global (GlobalType (NumType I32Type, Immutable)))
   | "global_f32", _ -> ExternGlobal (global (GlobalType (NumType F32Type, Immutable)))
   | "global_f64", _ -> ExternGlobal (global (GlobalType (NumType F64Type, Immutable)))

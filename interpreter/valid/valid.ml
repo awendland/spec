@@ -1,6 +1,7 @@
 open Ast
 open Source
 open Types
+open Extern_types
 
 
 (* Errors *)
@@ -21,7 +22,7 @@ type context =
      normal value_types, this property is only used for SealedAbsTypes.
      The int items in the list represent global IDs for the SealedAbsTypes.
    *)
-  abstypes : int list;
+  sealed_abstypes : unresolved_abstype_ref list;
   (* End: Abstract Type *)
   types : func_type list;
   funcs : func_type list;
@@ -32,13 +33,13 @@ type context =
   datas : unit list;
   locals : value_type list;
   results : value_type list;
-  labels : stack_type list;
+  labels : raw_stack_type list;
   refs : Free.t;
 }
 
 let empty_context =
   (* Start: Abstract Type *)
-  { abstypes = [];
+  { sealed_abstypes = [];
   (* End: Abstract Type *)
     types = []; funcs = []; tables = []; memories = [];
     globals = []; elems = []; datas = [];
@@ -50,9 +51,6 @@ let lookup category list x =
   try Lib.List32.nth list x.it with Failure _ ->
     error x.at ("unknown " ^ category ^ " " ^ Int32.to_string x.it)
 
-(* Start: Abstract Type *)
-let abstype (c : context) x = lookup "abstype" c.abstypes x
-(* End: Abstract Type *)
 let type_ (c : context) x = lookup "type" c.types x
 let func (c : context) x = lookup "function" c.funcs x
 let table (c : context) x = lookup "table" c.tables x
@@ -94,8 +92,8 @@ let (-->...) ts1 ts2 = {ins = Ellipses, ts1; outs = Ellipses, ts2}
 let check_stack ts1 ts2 at =
   require
     (List.length ts1 = List.length ts2 && List.for_all2 match_value_type ts1 ts2) at
-    ("type mismatch: operator requires " ^ string_of_stack_type ts2 ^
-     " but stack has " ^ string_of_stack_type ts1)
+    ("type mismatch: operator requires " ^ string_of_raw_stack_type ts2 ^
+     " but stack has " ^ string_of_raw_stack_type ts1)
 
 let pop (ell1, ts1) (ell2, ts2) at =
   let n1 = List.length ts1 in
@@ -259,7 +257,7 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
 
   | Call x ->
     let FuncType (ins, out) = func c x in
-    ins --> out
+    unwrap_stack ins --> unwrap_stack out
 
   | CallIndirect (x, y) ->
     let TableType (lim, t) = table c x in
@@ -267,7 +265,7 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     require (match_ref_type t FuncRefType) x.at
       ("type mismatch: instruction requires table of functions" ^
        " but table has " ^ string_of_ref_type t);
-    (ins @ [NumType I32Type]) --> out
+    (unwrap_stack ins @ [NumType I32Type]) --> unwrap_stack out
 
   | LocalGet x ->
     [] --> [local c x]
@@ -408,13 +406,13 @@ and check_seq (c : context) (es : instr list) : infer_stack_type =
     let {ins; outs} = check_instr c e s in
     push outs (pop ins s e.at)
 
-and check_block (c : context) (es : instr list) (ts : stack_type) at =
+and check_block (c : context) (es : instr list) (ts : raw_stack_type) at =
   let s = check_seq c es in
   let s' = pop (stack ts) s at in
   (* TODO maybe handle abstract types *)
   require (snd s' = []) at
-    ("type mismatch: operator requires " ^ string_of_stack_type ts ^
-     " but stack has " ^ string_of_stack_type (snd s))
+    ("type mismatch: operator requires " ^ string_of_raw_stack_type ts ^
+     " but stack has " ^ string_of_raw_stack_type (snd s))
 
 
 (* Types *)
@@ -439,16 +437,19 @@ let check_value_type (t : value_type) at =
   match t with
   | NumType t' -> check_num_type t' at
   | RefType t' -> check_ref_type t' at
-  (* Start: Abstract Types *)
   | SealedAbsType i -> ()
-  (* End: Abstract Types *)
   | BotType -> ()
+
+let check_wrapped_value_type (t : wrapped_value_type) at =
+  match t with
+  | RawValueType vt -> check_value_type vt at
+  | NewAbsType (vt, i) -> check_value_type vt at
 
 (* TODO maybe handle abstract types *)
 let check_func_type (ft : func_type) at =
   let FuncType (ins, out) = ft in
-  List.iter (fun t -> check_value_type t at) ins;
-  List.iter (fun t -> check_value_type t at) out;
+  List.iter (fun t -> check_wrapped_value_type t at) ins;
+  List.iter (fun t -> check_wrapped_value_type t at) out;
   check_arity (List.length out) at
 
 let check_table_type (tt : table_type) at =
@@ -481,15 +482,17 @@ let check_global_type (gt : global_type) at =
  *   x : variable
  *)
 
-O(* TODO maybe handle abstract types *)
+(* TODO maybe handle abstract types *)
 let check_type (t : type_) =
   check_func_type t.it t.at
 
 let check_func (c : context) (f : func) =
   let {ftype; locals; body} = f.it in
   let FuncType (ins, out) = type_ c ftype in
-  let c' = {c with locals = ins @ locals; results = out; labels = [out]} in
-  check_block c' body out f.at
+  let raw_out = unwrap_stack out in
+  let c' = {c with locals = unwrap_stack ins @ locals;
+                   results = raw_out; labels = [raw_out]} in
+  check_block c' body raw_out f.at
 
 
 let is_const (c : context) (e : instr) =
@@ -558,13 +561,10 @@ let check_start (c : context) (start : var option) =
   ) start
 
 let check_import (im : import) (c : context) : context =
-  let {module_name = _; item_name = _; idesc} = im.it in
+  let {module_name = mname; item_name = iname; idesc} = im.it in
   match idesc.it with
-  (* Start: Abstract Type *)
   | AbsTypeImport x ->
-    {c with abstypes = abstype c x :: c.abstypes }
-    (* TODO make sure that the imported funcs have their abstract types converted to sealed variants *)
-  (* End: Abstract Type *)
+    {c with sealed_abstypes = NamedModuleAbsRef (mname, iname) :: c.sealed_abstypes }
   | FuncImport x ->
     {c with funcs = type_ c x :: c.funcs}
   | TableImport tt ->
@@ -582,10 +582,7 @@ module NameSet = Set.Make(struct type t = Ast.name let compare = compare end)
 let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
   let {name; edesc} = ex.it in
   (match edesc.it with
-  (* Start: Abstract Type *)
-  (* TODO make sure that the exprted abstract types are converted to sealed variants *)
-  | AbsTypeExport x -> ignore (abstype c x)
-  (* End: Abstract Type *)
+  | AbsTypeExport x -> () (* new abstypes can only be created within export statements *)
   | FuncExport x -> ignore (func c x)
   | TableExport x -> ignore (table c x)
   | MemoryExport x -> ignore (memory c x)
@@ -597,9 +594,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
 let check_module (m : module_) =
   let
     (* Start: Abstract Types *)
-    { abtstypes; (* (value_type Source.phrase) list *)
-    (* End: Abstract Types *)
-      types; imports; tables; memories; globals; funcs; start; elems; datas;
+    { types; imports; tables; memories; globals; funcs; start; elems; datas;
       exports } = m.it
   in
   let c0 =
@@ -608,9 +603,6 @@ let check_module (m : module_) =
         refs = Free.list Free.elem elems;
         (* `types` must be declared up front because the FuncImports in check_import may reference them *)
         types = List.map (fun ty -> ty.it) types; 
-        (* End: Abstract Types *)
-        abstypes = List.map (fun aty -> aty.it) abstypes;
-        (* Start: Abstract Types *)
       }
   in
   let c1 =

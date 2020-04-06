@@ -9,6 +9,20 @@ module Code = Error.Make ()
 exception Code = Code.Error
 
 
+(* Abstract Types *)
+let raise_no_abstypes () = 
+  Code.error Source.no_region
+    "encoding abstract types is not supported (yet)"
+
+let fixme_uw wty =
+  let open Types in
+  match wty with
+  | RawValueType vt -> vt
+  | NewAbsType _ -> raise_no_abstypes ()
+
+let fixme_uwl = List.map fixme_uw
+
+
 (* Encoding stream *)
 
 type stream =
@@ -104,6 +118,8 @@ let encode m =
     let value_type = function
       | NumType t -> num_type t
       | RefType t -> ref_type t
+      (* FIXME add abstract type support *)
+      | SealedAbsType i -> raise_no_abstypes ()
       | BotType -> assert false
 
     let stack_type = function
@@ -115,7 +131,8 @@ let encode m =
 
     let func_type = function
       | FuncType (ins, out) ->
-        vs7 (-0x20); vec value_type ins; vec value_type out
+        (* FIXME add abstract type support *)
+        vs7 (-0x20); vec value_type (fixme_uwl ins); vec value_type (fixme_uwl out)
 
     let limits vu {min; max} =
       bool (max <> None); vu min; opt vu max
@@ -412,6 +429,7 @@ let encode m =
     (* Import section *)
     let import_desc d =
       match d.it with
+      | AbsTypeImport _ -> raise_no_abstypes ()
       | FuncImport x -> u8 0x00; var x
       | TableImport t -> u8 0x01; table_type t
       | MemoryImport t -> u8 0x02; memory_type t
@@ -457,6 +475,7 @@ let encode m =
     (* Export section *)
     let export_desc d =
       match d.it with
+      | AbsTypeExport _ -> raise_no_abstypes ()
       | FuncExport x -> u8 0; var x
       | TableExport x -> u8 1; var x
       | MemoryExport x -> u8 2; var x

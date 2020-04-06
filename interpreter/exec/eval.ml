@@ -1,6 +1,7 @@
 open Values
 open Types
 open Instance
+open Extern_types
 open Ast
 open Source
 
@@ -506,7 +507,7 @@ let rec step (c : config) : config =
       (match func with
       | Func.AstFunc (t, inst', f) ->
         let locals' = List.rev args @ List.map default_value f.it.locals in
-        let code' = [], [Plain (Block (out, f.it.body)) @@ f.at] in
+        let code' = [], [Plain (Block (unwrap_stack out, f.it.body)) @@ f.at] in
         let frame' = {inst = !inst'; locals = List.map ref locals'} in
         vs', [Frame (List.length out, frame', code') @@ e.at]
 
@@ -537,7 +538,7 @@ let invoke (func : func_inst) (vs : value list) : value list =
   if List.length vs <> List.length ins then
     Crash.error at "wrong number of arguments";
   (* TODO handle abstract types *)
-  if not (List.for_all2 (fun v -> match_value_type (type_of_value v)) vs ins) then
+  if not (List.for_all2 (fun v i -> match_value_type (type_of_value v) (unwrap i)) vs ins) then
     Crash.error at "wrong types of arguments";
   let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
   try List.rev (eval c) with Stack_overflow ->
@@ -572,8 +573,7 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
   let {name; edesc} = ex.it in
   let ext =
     match edesc.it with
-    (* TODO: I think this is where an AbsType should be given an ID and sealed *)
-    (* | AbsTypeExport x -> ExternAbsType x.it *)
+    | AbsTypeExport x -> ExternAbsTypeInst (ref inst, x.it)
     | FuncExport x -> ExternFunc (func inst x)
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
@@ -589,12 +589,12 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
   ref dinit
 
 
-let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
-  : module_inst =
+let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
   (* TODO handle abstract types *)
-  if not (match_extern_type (extern_type_of ext) (import_type m im)) then
+  if not (match_extern_type (extern_type_of ext) (import_type (ref inst) im)) then
     Link.error im.at "incompatible import type";
   match ext with
+  | ExternAbsTypeInst aty -> {inst with sealed_abstypes = aty :: inst.sealed_abstypes}
   | ExternFunc func -> {inst with funcs = func :: inst.funcs}
   | ExternTable tab -> {inst with tables = tab :: inst.tables}
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}
@@ -647,7 +647,7 @@ let init (m : module_) (exts : extern list) : module_inst =
   if List.length exts <> List.length imports then
     Link.error m.at "wrong number of imports provided for initialisation";
   let inst0 =
-    { (List.fold_right2 (add_import m) exts imports empty_module_inst) with
+    { (List.fold_right2 add_import exts imports empty_module_inst) with
       types = List.map (fun type_ -> type_.it) types }
   in
   let fs = List.map (create_func inst0) funcs in
