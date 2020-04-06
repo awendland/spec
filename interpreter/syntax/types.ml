@@ -87,18 +87,6 @@ let is_ref_type = function
   (* End: Abstract Types *)
 
 
-(* Filters *)
-
-let funcs =
-  Lib.List.map_filter (function ExternFuncType t -> Some t | _ -> None)
-let tables =
-  Lib.List.map_filter (function ExternTableType t -> Some t | _ -> None)
-let memories =
-  Lib.List.map_filter (function ExternMemoryType t -> Some t | _ -> None)
-let globals =
-  Lib.List.map_filter (function ExternGlobalType t -> Some t | _ -> None)
-
-
 (* String conversion *)
 
 let string_of_num_type = function
@@ -116,9 +104,13 @@ let string_of_value_type = function
   | NumType t -> string_of_num_type t
   | RefType t -> string_of_ref_type t
   (* Start: Abstract Types *)
-  | SealedAbsType i -> "abstype"
+  | SealedAbsType i -> "abs-" ^ Int32.to_string i
   (* End: Abstract Types *)
   | BotType -> "impossible"
+
+let string_of_wrapped_value_type = function
+  | RawValueType vt -> string_of_value_type vt
+  | NewAbsType (vt, i) -> "new abstype [" ^ string_of_value_type vt ^ "]"
 
 let string_of_value_types = function
   | [t] -> string_of_value_type t
@@ -140,13 +132,7 @@ let string_of_global_type = function
   | GlobalType (t, Mutable) -> "(mut " ^ string_of_value_type t ^ ")"
 
 let string_of_stack_type ts =
-  "[" ^ String.concat " " (List.map string_of_value_type ts) ^ "]"
+  "[" ^ String.concat " " (List.map string_of_wrapped_value_type ts) ^ "]"
 
 let string_of_func_type (FuncType (ins, out)) =
   string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
-
-let string_of_extern_type = function
-  | ExternFuncType ft -> "func " ^ string_of_func_type ft
-  | ExternTableType tt -> "table " ^ string_of_table_type tt
-  | ExternMemoryType mt -> "memory " ^ string_of_memory_type mt
-  | ExternGlobalType gt -> "global " ^ string_of_global_type gt

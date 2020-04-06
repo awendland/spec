@@ -193,7 +193,7 @@ and export' =
 type import_desc = import_desc' Source.phrase
 and import_desc' =
   (* Start: Abstract Types *)
-  | AbsTypeImport (* Driven by import_desc, import_type, match_extern_type *)
+  | AbsTypeImport of var (* TODO driven by import_desc, import_type, match_extern_type *)
   (* End: Abstract Types *)
   | FuncImport of var
   | TableImport of table_type
@@ -242,45 +242,6 @@ let empty_module =
   imports = [];
   exports = [];
 }
-
-open Source
-
-let func_type_for (m : module_) (x : var) : func_type =
-  (Lib.List32.nth m.it.types x.it).it
-
-let import_type (m : module_) (im : import) : extern_type =
-  let {idesc; _} = im.it in
-  match idesc.it with
-  | AbsTypeImport -> ExternAbsType TODO
-  | FuncImport x -> ExternFuncType (func_type_for m x)
-  | TableImport t -> ExternTableType t
-  | MemoryImport t -> ExternMemoryType t
-  | GlobalImport t -> ExternGlobalType t
-
-(* TODO: export_type isn't actually used for anything meaningful, just debug info *)
-let export_type (m : module_) (ex : export) : extern_type =
-  let {edesc; _} = ex.it in
-  let its = List.map (import_type m) m.it.imports in
-  let open Lib.List32 in
-  match edesc.it with
-  (* Start: Abstract Type *)
-  | AbsTypeExport x ->
-    let ats = abstypes its @  in
-    ExternAbsType (nth ats x.it)
-  (* End: Abstract Type *)
-  | FuncExport x ->
-    let fts =
-      funcs its @ List.map (fun f -> func_type_for m f.it.ftype) m.it.funcs
-    in ExternFuncType (nth fts x.it)
-  | TableExport x ->
-    let tts = tables its @ List.map (fun t -> t.it.ttype) m.it.tables in
-    ExternTableType (nth tts x.it)
-  | MemoryExport x ->
-    let mts = memories its @ List.map (fun m -> m.it.mtype) m.it.memories in
-    ExternMemoryType (nth mts x.it)
-  | GlobalExport x ->
-    let gts = globals its @ List.map (fun g -> g.it.gtype) m.it.globals in
-    ExternGlobalType (nth gts x.it)
 
 let string_of_name n =
   let b = Buffer.create 16 in

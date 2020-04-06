@@ -30,12 +30,17 @@ and data_inst = string ref
 
 and extern =
   (* Start: Abstract Type *)
-  (* | ExternAbsTypeInst of sealed_abstype_inst *)
+  | ExternAbsTypeInst of sealed_abstype_inst
   (* End: Abstract Type *)
   | ExternFunc of func_inst
   | ExternTable of table_inst
   | ExternMemory of memory_inst
   | ExternGlobal of global_inst
+
+
+type host_module_inst =
+  | HostInst
+  | ModuleInst of module_inst ref
 
 
 (* Reference types *)
@@ -58,17 +63,9 @@ let () =
 (* Auxiliary functions *)
 
 let empty_module_inst =
-  { types = []; funcs = []; tables = []; memories = []; globals = [];
-    exports = []; elems = []; datas = [] }
-
-let extern_type_of = function
-  (* Start: Abstract Types *)
-  (* | ExternAbsTypeInst uid -> ExternAbsType uid *)
-  (* End: Abstract Types *)
-  | ExternFunc func -> ExternFuncType (Func.type_of func)
-  | ExternTable tab -> ExternTableType (Table.type_of tab)
-  | ExternMemory mem -> ExternMemoryType (Memory.type_of mem)
-  | ExternGlobal glob -> ExternGlobalType (Global.type_of glob)
+  { new_abstypes = []; sealed_abstypes = []; types = []; funcs = [];
+    tables = []; memories = []; globals = []; exports = [];
+    elems = []; datas = [] }
 
 let export inst name =
   try Some (List.assoc name inst.exports) with Not_found -> None
