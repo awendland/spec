@@ -70,43 +70,41 @@ let empty () = {map = VarMap.empty; count = 0l}
 type types = {space : space; mutable list : type_ list}
 let empty_types () = {space = empty (); list = []}
 
-(* Start: Abstract Types *)
-(* NOTE: because SealedAbsType is a value_type, this approach supports both within module and external abstract types *)
 type new_abstypes = {space : space; mutable list : value_type list} 
 let empty_new_abstypes () : new_abstypes = {space = empty (); list = []}
-(* End: Abstract Types *)
 
 type context =
   { types : types; tables : space; memories : space;
     funcs : space; locals : space; globals : space;
     data : space; elems : space;
     labels : int32 VarMap.t;
-    (* Start: Abstract Types *)
     new_abstypes : new_abstypes;
     sealed_abstypes : space }
-    (* End: Abstract Types *)
 
 let empty_context () =
   { types = empty_types (); tables = empty (); memories = empty ();
     funcs = empty (); locals = empty (); globals = empty ();
     data = empty (); elems = empty ();
     labels = VarMap.empty;
-    (* Start: Abstract Types *)
     new_abstypes = empty_new_abstypes ();
     sealed_abstypes = empty () }
-    (* End: Abstract Types *)
 
 let enter_func (c : context) =
   {c with labels = VarMap.empty; locals = empty ()}
 
+let print_space space = 
+  if false then
+    if VarMap.is_empty space.map then Printf.printf "%s\n" "empty"
+    else VarMap.iter (fun key value -> Printf.printf "%s -> %s\n" key (Int32.to_string value)) space.map
+
 let lookup category space x =
+  Printf.printf "%s\n" ("lookup " ^ x.it ^ " in " ^ category);
+  print_space space;
   try VarMap.find x.it space.map
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
-(* Start: Abstract Types *)
-let new_abstype (c : context) x = lookup "new abstype" c.new_abstypes.space x
-let sealed_abstype (c : context) x = lookup "sealed abstype" c.sealed_abstypes x
-(* End: Abstract Types *)
+let new_abstype (c : context) x = lookup "abstype_new" c.new_abstypes.space x
+let sealed_abstype (c : context) x = lookup "abstype_sealed" c.sealed_abstypes x
 let type_ (c : context) x = lookup "type" c.types.space x
 let func (c : context) x = lookup "function" c.funcs x
 let local (c : context) x = lookup "local" c.locals x
@@ -120,8 +118,9 @@ let label (c : context) x =
   with Not_found -> error x.at ("unknown label " ^ x.it)
 
 let unwrap_new_abstype (c : context) x : value_type =
+  print_space c.new_abstypes.space;
   try (Lib.List32.nth c.new_abstypes.list x.it)
-  with Failure _ -> error x.at ("unknown new abstype " ^ Int32.to_string x.it)
+  with Failure _ -> error x.at ("unknown abstype_new " ^ Int32.to_string x.it)
 
 let func_type (c : context) x =
   try (Lib.List32.nth c.types.list x.it).it
@@ -129,6 +128,8 @@ let func_type (c : context) x =
 
 
 let bind category space x =
+  Printf.printf "%s\n" ("binding " ^ x.it ^ " in " ^ category);
+  print_space space;
   if VarMap.mem x.it space.map then
     error x.at ("duplicate " ^ category ^ " " ^ x.it);
   let i = space.count in
@@ -136,14 +137,13 @@ let bind category space x =
   space.count <- Int32.add space.count 1l;
   if space.count = 0l then 
     error x.at ("too many " ^ category ^ " bindings");
+  print_space space;
   i
 
-(* Start: Abstract Types *)
 let bind_new_abstype (c : context) x vt =
   c.new_abstypes.list <- c.new_abstypes.list @ [vt];
   bind "new abstype" c.new_abstypes.space x
 let bind_sealed_abstype (c : context) x = bind "sealed abstype" c.sealed_abstypes x
-(* End: Abstract Types *)
 let bind_type (c : context) x ty =
   c.types.list <- c.types.list @ [ty];
   bind "type" c.types.space x
@@ -164,12 +164,10 @@ let anon category space n =
     error no_region ("too many " ^ category ^ " bindings");
   i
 
-(* Start: Abstract Types *)
 let anon_new_abstype (c : context) vt =
   c.new_abstypes.list <- c.new_abstypes.list @ [vt];
   anon "new abstype" c.new_abstypes.space 1l
 let anon_sealed_abstype (c : context) = anon "sealed abstype" c.sealed_abstypes 1l
-(* End: Abstract Types *)
 let anon_type (c : context) ty =
   c.types.list <- c.types.list @ [ty];
   anon "type" c.types.space 1l
@@ -902,7 +900,7 @@ inline_import :
   | LPAR IMPORT name name RPAR { $3, $4 }
 
 export_desc :
-  | LPAR abstype_new RPAR { fun c -> AbsTypeExport ($2 c) }
+  | LPAR ABSTYPE_NEW_REF var RPAR { fun c -> AbsTypeExport ($3 c new_abstype) }
   | LPAR FUNC var RPAR { fun c -> FuncExport ($3 c func) }
   | LPAR TABLE var RPAR { fun c -> TableExport ($3 c table) }
   | LPAR MEMORY var RPAR { fun c -> MemoryExport ($3 c memory) }
@@ -939,56 +937,69 @@ module_fields :
   | module_fields1 { $1 }
 
 module_fields1 :
+  | abstype_new module_fields
+    { Printf.printf "%s\n" "abstype_new";
+      fun c -> ignore ($1 c); $2 c }
   | type_def module_fields
-    { fun c -> ignore ($1 c); $2 c }
+    { Printf.printf "%s\n" "type_def";
+      fun c -> ignore ($1 c); $2 c }
   | global module_fields
-    { fun c -> let gf = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "global";
+      fun c -> let gf = $1 c in let mf = $2 c in
       fun () -> let globs, ims, exs = gf () in let m = mf () in
       if globs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after global definition";
       { m with globals = globs @ m.globals;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | table module_fields
-    { fun c -> let tf = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "table";
+      fun c -> let tf = $1 c in let mf = $2 c in
       fun () -> let tabs, elems, ims, exs = tf () in let m = mf () in
       if tabs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after table definition";
       { m with tables = tabs @ m.tables; elems = elems @ m.elems;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | memory module_fields
-    { fun c -> let mmf = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "memory";
+      fun c -> let mmf = $1 c in let mf = $2 c in
       fun () -> let mems, data, ims, exs = mmf () in let m = mf () in
       if mems <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after memory definition";
       { m with memories = mems @ m.memories; datas = data @ m.datas;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | func module_fields
-    { fun c -> let ff = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "func";
+      fun c -> let ff = $1 c in let mf = $2 c in
       fun () -> let funcs, ims, exs = ff () in let m = mf () in
       if funcs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after function definition";
       { m with funcs = funcs @ m.funcs;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | elem module_fields
-    { fun c -> let ef = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "elem";
+      fun c -> let ef = $1 c in let mf = $2 c in
       fun () -> let elems = ef () in let m = mf () in
       {m with elems = elems :: m.elems} }
   | data module_fields
-    { fun c -> let df = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "data";
+      fun c -> let df = $1 c in let mf = $2 c in
       fun () -> let data = df () in let m = mf () in
       {m with datas = data :: m.datas} }
   | start module_fields
-    { fun c -> let mf = $2 c in
+    { Printf.printf "%s\n" "start";
+      fun c -> let mf = $2 c in
       fun () -> let m = mf () in let x = $1 c in
       match m.start with
       | Some _ -> error x.at "multiple start sections"
       | None -> {m with start = Some x} }
   | import module_fields
-    { fun c -> let imf = $1 c in let mf = $2 c in
+    { Printf.printf "%s\n" "import";
+      fun c -> let imf = $1 c in let mf = $2 c in
       fun () -> let im = imf () in let m = mf () in
       {m with imports = im :: m.imports} }
   | export module_fields
-    { fun c -> let mf = $2 c in
+    { Printf.printf "%s\n" "export";
+      fun c -> let mf = $2 c in
       fun () -> let m = mf () in
       {m with exports = $1 c :: m.exports} }
 

@@ -588,10 +588,28 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
   let {dinit; _} = seg.it in
   ref dinit
 
+let print_import im =
+  let {module_name; item_name; _} = im.it in
+  Printf.printf "%s %s\n" (Ast.string_of_name module_name) (Ast.string_of_name item_name)
 
 let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
   (* TODO handle abstract types *)
-  if not (match_extern_type (extern_type_of ext) (import_type (ref inst) im)) then
+  Printf.printf "Resolving "; print_import im;
+  let types_match =
+    match (extern_type_of ext), im.it.idesc.it with
+    | ExternAbsType ate, AbsTypeImport x -> true (* abstype matches are based purely on reference *)
+    | ExternFuncType rfte, FuncImport x ->
+      let fti = func_type_inst inst x in
+      let rfti = resolve_extern_func_type (ModuleInst (ref inst)) fti in
+      Printf.printf "%s\n" (string_of_extern_func_type string_of_resolved_abstype rfte);
+      Printf.printf "%s\n" (string_of_extern_func_type string_of_resolved_abstype rfti);
+      match_resolved_func_type rfte rfti
+    | ExternTableType tte, TableImport tti -> match_table_type tte tti
+    | ExternMemoryType mte, MemoryImport mti -> match_memory_type mte mti
+    | ExternGlobalType gte, GlobalImport gti -> match_global_type gte gti
+    | _, _ -> false
+  in
+  if not types_match then
     Link.error im.at "incompatible import type";
   match ext with
   | ExternAbsTypeInst aty -> {inst with sealed_abstypes = aty :: inst.sealed_abstypes}
@@ -644,29 +662,39 @@ let init (m : module_) (exts : extern list) : module_inst =
       exports; elems; datas; start
     } = m.it
   in
+  let inst0 =
+    { empty_module_inst with
+      types = List.map (fun type_ -> type_.it) types }
+  in
+  List.iter print_import imports;
   if List.length exts <> List.length imports then
     Link.error m.at "wrong number of imports provided for initialisation";
-  let inst0 =
-    let inst_types =
-      { empty_module_inst with
-        types = List.map (fun type_ -> type_.it) types }
+  (* abstype imports must be resolved first *)
+  let imports, exts =
+    let abstypes_first = fun (im1, _) -> fun (im2, _) ->
+      match im1.it.idesc.it, im2.it.idesc.it with
+      | AbsTypeImport _, AbsTypeImport _ -> 0
+      | AbsTypeImport _, _ -> 1
+      | _ , AbsTypeImport _ -> -1
+      | _ -> 0
     in
-    (List.fold_right2 add_import exts imports inst_types)
+    List.split (List.stable_sort abstypes_first (List.combine imports exts))
   in
-  let fs = List.map (create_func inst0) funcs in
-  let inst1 = {inst0 with funcs = inst0.funcs @ fs} in
-  let inst2 =
-    { inst1 with
-      tables = inst1.tables @ List.map (create_table inst1) tables;
-      memories = inst1.memories @ List.map (create_memory inst1) memories;
-      globals = inst1.globals @ List.map (create_global inst1) globals;
+  let inst1 = (List.fold_right2 add_import exts imports inst0) in
+  let fs = List.map (create_func inst1) funcs in
+  let inst2 = {inst1 with funcs = inst1.funcs @ fs} in
+  let inst3 =
+    { inst2 with
+      tables = inst2.tables @ List.map (create_table inst2) tables;
+      memories = inst2.memories @ List.map (create_memory inst2) memories;
+      globals = inst2.globals @ List.map (create_global inst2) globals;
     }
   in
   let inst =
-    { inst2 with
-      exports = List.map (create_export inst2) exports;
-      elems = List.map (create_elem inst2) elems;
-      datas = List.map (create_data inst2) datas;
+    { inst3 with
+      exports = List.map (create_export inst3) exports;
+      elems = List.map (create_elem inst3) elems;
+      datas = List.map (create_data inst3) datas;
     }
   in
   List.iter (init_func inst) fs;

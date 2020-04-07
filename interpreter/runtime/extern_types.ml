@@ -43,19 +43,26 @@ type resolved_extern_type = resolved_abstype_ref extern_type
 
 (* Comparisons *)
 
+let match_resolved_value_type vt1 vt2 =
+  match vt1, vt2 with
+  | ExternNumType vt1', ExternNumType vt2' -> match_num_type vt1' vt2'
+  | ExternRefType vt1', ExternRefType vt2' -> match_ref_type vt1' vt2'
+  | ExternSealedAbsType vt1', ExternSealedAbsType vt2' ->
+    (match vt1', vt2' with
+    | InstModuleAbsRef (r1, i1), InstModuleAbsRef (r2, i2) -> r1 == r2 && i1 = i2
+    )
+  | ExternBotType, _ -> true
+  | _, _ -> false
+
+let match_resolved_stack_types st1 st2 =
+  List.for_all2 match_resolved_value_type st1 st2
+
 let match_resolved_func_type
     (ft1 : resolved_extern_func_type)
     (ft2 : resolved_extern_func_type) =
-  ft1 = ft2
-
-let match_extern_type (et1 : resolved_extern_type) (et2 : resolved_extern_type) =
-  match et1, et2 with
-  | ExternAbsType at1, ExternAbsType at2 -> at1 = at2
-  | ExternFuncType ft1, ExternFuncType ft2 -> match_resolved_func_type ft1 ft2
-  | ExternTableType tt1, ExternTableType tt2 -> match_table_type tt1 tt2
-  | ExternMemoryType mt1, ExternMemoryType mt2 -> match_memory_type mt1 mt2
-  | ExternGlobalType gt1, ExternGlobalType gt2 -> match_global_type gt1 gt2
-  | _, _ -> false
+  let ExternFuncSigType (ins1, out1, _) = ft1 in
+  let ExternFuncSigType (ins2, out2, _) = ft2 in
+  match_resolved_stack_types ins1 ins2 && match_resolved_stack_types out1 out2
 
 
 (* Type Conversions *)
@@ -161,17 +168,6 @@ let func_type_inst (m : module_inst) (x : var) : func_type =
 
 let sealed_abstype_for (inst : module_inst) (x : var) : sealed_abstype_inst =
   Lib.List32.nth inst.sealed_abstypes x.it
-
-let import_type (inst : module_inst ref) (im : import) : resolved_extern_type =
-  let {idesc; _} = im.it in
-  match idesc.it with
-  | AbsTypeImport x -> ExternAbsType (InstModuleAbsRef (sealed_abstype_for !inst x))
-  | FuncImport x ->
-    let ft = func_type_inst !inst x in
-    ExternFuncType (resolve_extern_func_type (ModuleInst inst) ft)
-  | TableImport t -> ExternTableType t
-  | MemoryImport t -> ExternMemoryType t
-  | GlobalImport t -> ExternGlobalType t
 
 let unresolved_import_type (m : module_) (im : import) : unresolved_extern_type =
   let {module_name; item_name; idesc; _} = im.it in
