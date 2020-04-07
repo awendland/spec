@@ -107,7 +107,6 @@ let data (s : data_segment) =
 
 let type_ (t : type_) = empty
 
-(* TODO what do these functions do? *)
 let export_desc (d : export_desc) =
   match d.it with
   | AbsTypeExport x -> empty

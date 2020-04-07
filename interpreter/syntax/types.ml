@@ -64,8 +64,7 @@ let match_limits lim1 lim2 =
   | None, Some _ -> false
   | Some i, Some j -> I32.le_u i j
 
-(* TODO this should probably be removed *)
-let match_local_func_type ft1 ft2 =
+let match_func_type ft1 ft2 =
   ft1 = ft2
 
 let match_table_type (TableType (lim1, et1)) (TableType (lim2, et2)) =
@@ -110,7 +109,7 @@ let string_of_value_type = function
   | NumType t -> string_of_num_type t
   | RefType t -> string_of_ref_type t
   (* Start: Abstract Types *)
-  | SealedAbsType i -> "abs-" ^ Int32.to_string i
+  | SealedAbsType i -> "abs{" ^ Int32.to_string i ^ "}"
   (* End: Abstract Types *)
   | BotType -> "impossible"
 

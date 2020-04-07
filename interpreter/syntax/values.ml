@@ -13,8 +13,6 @@ type ref_ += NullRef
 
 type value = Num of num | Ref of ref_
 
-(* TODO type sealed_abs = SealedAbs of value *)
-
 
 (* Typing *)
 

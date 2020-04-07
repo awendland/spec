@@ -1,9 +1,17 @@
 open Types
 
+type module_inst_uid = ModuleInstUID of int32
+let lastID = ref 0l
+let issue_module_inst_uid () : module_inst_uid =
+  let newID = Int32.add !lastID 1l in
+  if newID < !lastID then assert false;
+  lastID := newID;
+  ModuleInstUID !lastID
+
 type module_inst =
 {
+  uid : module_inst_uid;
   new_abstypes : value_type list;
-  (* TODO see add_import handling in todo-abstract-types.wast *)
   sealed_abstypes : sealed_abstype_inst list;
   types : func_type list;
   funcs : func_inst list;
@@ -15,11 +23,7 @@ type module_inst =
   datas : data_inst list;
 }
 
-(* Have the parser create Ast.name * Ast.name, and then have the
-   typechecking occur on the reference? No point in that, because the
-   reference will just be derived from the name anyways. *)
-(* and sealed_abstype_inst = Ast.name * Ast.name (* Module name, Export name *) *)
-and sealed_abstype_inst = module_inst ref * int32
+and sealed_abstype_inst = module_inst_uid * int32
 and func_inst = module_inst ref Func.t
 and table_inst = Table.t
 and memory_inst = Memory.t
@@ -29,9 +33,7 @@ and elem_inst = Values.ref_ list ref
 and data_inst = string ref
 
 and extern =
-  (* Start: Abstract Type *)
   | ExternAbsTypeInst of sealed_abstype_inst
-  (* End: Abstract Type *)
   | ExternFunc of func_inst
   | ExternTable of table_inst
   | ExternMemory of memory_inst
@@ -40,7 +42,7 @@ and extern =
 
 type host_module_inst =
   | HostInst
-  | ModuleInst of module_inst ref
+  | ModuleInst of module_inst
 
 
 (* Reference types *)
@@ -63,7 +65,8 @@ let () =
 (* Auxiliary functions *)
 
 let empty_module_inst =
-  { new_abstypes = []; sealed_abstypes = []; types = []; funcs = [];
+  { uid = issue_module_inst_uid ();
+    new_abstypes = []; sealed_abstypes = []; types = []; funcs = [];
     tables = []; memories = []; globals = []; exports = [];
     elems = []; datas = [] }
 

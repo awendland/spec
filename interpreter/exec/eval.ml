@@ -182,10 +182,10 @@ let rec step (c : config) : config =
         vs, [Invoke (func frame.inst x) @@ e.at]
 
       | CallIndirect (x, y), Num (I32 i) :: vs ->
-        (* TODO handle abstract types *)
         let func = func_ref frame.inst x i e.at in
-        (* if not (match_func_type (type_ frame.inst y) (Func.type_of func)) then *)
-        if type_ frame.inst y <> Func.type_of func then
+        let func_ety = extern_type_of_func func in
+        let expected_ety = resolve_extern_func_type (ModuleInst frame.inst) (type_ frame.inst y) in
+        if not (match_resolved_func_type func_ety expected_ety) then
           vs, [Trapping "indirect call type mismatch" @@ e.at]
         else
           vs, [Invoke func @@ e.at]
@@ -537,7 +537,6 @@ let invoke (func : func_inst) (vs : value list) : value list =
   let FuncType (ins, out) = Func.type_of func in
   if List.length vs <> List.length ins then
     Crash.error at "wrong number of arguments";
-  (* TODO handle abstract types *)
   if not (List.for_all2 (fun v i -> match_value_type (type_of_value v) (unwrap i)) vs ins) then
     Crash.error at "wrong types of arguments";
   let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
@@ -573,7 +572,7 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
   let {name; edesc} = ex.it in
   let ext =
     match edesc.it with
-    | AbsTypeExport x -> ExternAbsTypeInst (ref inst, x.it)
+    | AbsTypeExport x -> ExternAbsTypeInst (inst.uid, x.it)
     | FuncExport x -> ExternFunc (func inst x)
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
@@ -593,16 +592,13 @@ let print_import im =
   Printf.printf "%s %s\n" (Ast.string_of_name module_name) (Ast.string_of_name item_name)
 
 let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
-  (* TODO handle abstract types *)
   Printf.printf "Resolving "; print_import im;
   let types_match =
     match (extern_type_of ext), im.it.idesc.it with
     | ExternAbsType ate, AbsTypeImport x -> true (* abstype matches are based purely on reference *)
     | ExternFuncType rfte, FuncImport x ->
       let fti = func_type_inst inst x in
-      let rfti = resolve_extern_func_type (ModuleInst (ref inst)) fti in
-      Printf.printf "%s\n" (string_of_extern_func_type string_of_resolved_abstype rfte);
-      Printf.printf "%s\n" (string_of_extern_func_type string_of_resolved_abstype rfti);
+      let rfti = resolve_extern_func_type (ModuleInst inst) fti in
       match_resolved_func_type rfte rfti
     | ExternTableType tte, TableImport tti -> match_table_type tte tti
     | ExternMemoryType mte, MemoryImport mti -> match_memory_type mte mti

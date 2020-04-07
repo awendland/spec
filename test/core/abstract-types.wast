@@ -43,16 +43,19 @@
 
 ;; ;; TODO create global, local demos
 
-;; ;; TODO outdated
-;; (assert_trap 
-;;   (module
-;;     (import "MOD_1" "A" (abstype_sealed $A))
-;;     (type (;0;) (param (abstype_sealed_ref $A)))
-;;     (func $useA (import "MOD_1" "useA") (type 0))
-;;     (func $f
-;;       (i32.const 42)
-;;       (call $useA)
-;;     )
-;;   )
-;;   "incompatible import type"
-;; )
+;; TODO outdated
+(assert_invalid
+  (module
+    (import "MOD_1" "A" (abstype_sealed $A))
+    (type (;0;) (func (param (abstype_sealed_ref $A))))
+    (func $useA (import "MOD_1" "useA") (type 0))
+    (func $f
+      (i32.const 42)
+      (call $useA)
+    )
+  )
+  "type mismatch"
+)
+
+;; TODO test call_indirect w/ abstypes
+;; TODO test invoke

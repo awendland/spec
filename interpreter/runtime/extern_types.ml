@@ -9,7 +9,7 @@ open Instance
    can be properly compared. *)
 type unresolved_abstype_ref =
   | NamedModuleAbsRef of Ast.name * Ast.name
-  | LocalModuleAbsRef of int32 (* todo should this have the item export name? *)
+  | LocalModuleAbsRef of int32
 
 type resolved_abstype_ref =
   | InstModuleAbsRef of sealed_abstype_inst
@@ -55,6 +55,7 @@ let match_resolved_value_type vt1 vt2 =
   | _, _ -> false
 
 let match_resolved_stack_types st1 st2 =
+  List.length st1 = List.length st2 &&
   List.for_all2 match_resolved_value_type st1 st2
 
 let match_resolved_func_type
@@ -118,12 +119,12 @@ let local_extern_func_type (m : module_) =
 
 let inst_seal_new_abstype hinst i =
   match hinst with
-  | ModuleInst inst -> ExternSealedAbsType (InstModuleAbsRef (inst, i))
+  | ModuleInst inst -> ExternSealedAbsType (InstModuleAbsRef (inst.uid, i))
   | HostInst -> assert false
 
 let inst_resolve_sealed_abstype hinst i =
   match hinst with
-  | ModuleInst inst -> InstModuleAbsRef (Lib.List32.nth !inst.sealed_abstypes i)
+  | ModuleInst inst -> InstModuleAbsRef (Lib.List32.nth inst.sealed_abstypes i)
   | HostInst -> assert false
 
 let resolve_extern_func_type (hinst : host_module_inst) =
@@ -134,7 +135,7 @@ let resolve_extern_func_type (hinst : host_module_inst) =
 open Func
 
 let extern_type_of_func = function
-  | AstFunc (ft, inst, _) -> resolve_extern_func_type (ModuleInst inst) ft
+  | AstFunc (ft, inst, _) -> resolve_extern_func_type (ModuleInst !inst) ft
   | HostFunc (ft, _) -> resolve_extern_func_type HostInst ft
 
 let extern_type_of = function
@@ -159,7 +160,6 @@ let globals =
 
 (* Import/Export Conversions *)
 
-(* TODO deprecate? *)
 let func_type_module (m : module_) (x : var) : func_type =
   (Lib.List32.nth m.it.types x.it).it
 
@@ -179,8 +179,6 @@ let unresolved_import_type (m : module_) (im : import) : unresolved_extern_type 
   | MemoryImport t -> ExternMemoryType t
   | GlobalImport t -> ExternGlobalType t
 
-(* TODO: export_type isn't actually used for anything meaningful, just debug info *)
-(* TODO: actually, it's also used in script/js.ml *)
 let unresolved_export_type (m : module_) (ex : export) : unresolved_extern_type =
   let {edesc; _} = ex.it in
   let its = List.map (unresolved_import_type m) m.it.imports in
@@ -210,12 +208,12 @@ let unresolved_export_type (m : module_) (ex : export) : unresolved_extern_type 
 
 let string_of_unresolved_abstype = function
   | NamedModuleAbsRef (mname, iname) ->
-    "abs-'" ^ Ast.string_of_name iname ^ "'@'" ^ Ast.string_of_name mname ^ "'"
-  | LocalModuleAbsRef i -> "abs-l" ^ Int32.to_string i
+    "abs{'" ^ Ast.string_of_name iname ^ "','" ^ Ast.string_of_name mname ^ "'}"
+  | LocalModuleAbsRef i -> "abs{" ^ Int32.to_string i ^ "}"
 
 let string_of_resolved_abstype = function
-  (* FIXME print a stable identifier for the module instance *)
-  | InstModuleAbsRef (inst, i) -> "abs-r"
+  | InstModuleAbsRef (ModuleInstUID uid, i) ->
+    "abs{" ^ Int32.to_string uid ^ "," ^ Int32.to_string i ^ "}"
 
 (* NOTE: these should behave similarly to string funcs in Types *)
 
