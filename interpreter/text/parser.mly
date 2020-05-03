@@ -92,14 +92,7 @@ let empty_context () =
 let enter_func (c : context) =
   {c with labels = VarMap.empty; locals = empty ()}
 
-let print_space space = 
-  if false then
-    if VarMap.is_empty space.map then Printf.printf "%s\n" "empty"
-    else VarMap.iter (fun key value -> Printf.printf "%s -> %s\n" key (Int32.to_string value)) space.map
-
 let lookup category space x =
-  Printf.printf "%s\n" ("lookup " ^ x.it ^ " in " ^ category);
-  print_space space;
   try VarMap.find x.it space.map
   with Not_found -> error x.at ("unknown " ^ category ^ " " ^ x.it)
 
@@ -118,7 +111,6 @@ let label (c : context) x =
   with Not_found -> error x.at ("unknown label " ^ x.it)
 
 let unwrap_new_abstype (c : context) x : value_type =
-  print_space c.new_abstypes.space;
   try (Lib.List32.nth c.new_abstypes.list x.it)
   with Failure _ -> error x.at ("unknown abstype_new " ^ Int32.to_string x.it)
 
@@ -128,8 +120,6 @@ let func_type (c : context) x =
 
 
 let bind category space x =
-  Printf.printf "%s\n" ("binding " ^ x.it ^ " in " ^ category);
-  print_space space;
   if VarMap.mem x.it space.map then
     error x.at ("duplicate " ^ category ^ " " ^ x.it);
   let i = space.count in
@@ -137,7 +127,6 @@ let bind category space x =
   space.count <- Int32.add space.count 1l;
   if space.count = 0l then 
     error x.at ("too many " ^ category ^ " bindings");
-  print_space space;
   i
 
 let bind_new_abstype (c : context) x vt =
@@ -938,68 +927,57 @@ module_fields :
 
 module_fields1 :
   | abstype_new module_fields
-    { Printf.printf "%s\n" "abstype_new";
-      fun c -> ignore ($1 c); $2 c }
+    { fun c -> ignore ($1 c); $2 c }
   | type_def module_fields
-    { Printf.printf "%s\n" "type_def";
-      fun c -> ignore ($1 c); $2 c }
+    { fun c -> ignore ($1 c); $2 c }
   | global module_fields
-    { Printf.printf "%s\n" "global";
-      fun c -> let gf = $1 c in let mf = $2 c in
+    { fun c -> let gf = $1 c in let mf = $2 c in
       fun () -> let globs, ims, exs = gf () in let m = mf () in
       if globs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after global definition";
       { m with globals = globs @ m.globals;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | table module_fields
-    { Printf.printf "%s\n" "table";
-      fun c -> let tf = $1 c in let mf = $2 c in
+    { fun c -> let tf = $1 c in let mf = $2 c in
       fun () -> let tabs, elems, ims, exs = tf () in let m = mf () in
       if tabs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after table definition";
       { m with tables = tabs @ m.tables; elems = elems @ m.elems;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | memory module_fields
-    { Printf.printf "%s\n" "memory";
-      fun c -> let mmf = $1 c in let mf = $2 c in
+    { fun c -> let mmf = $1 c in let mf = $2 c in
       fun () -> let mems, data, ims, exs = mmf () in let m = mf () in
       if mems <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after memory definition";
       { m with memories = mems @ m.memories; datas = data @ m.datas;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | func module_fields
-    { Printf.printf "%s\n" "func";
-      fun c -> let ff = $1 c in let mf = $2 c in
+    { fun c -> let ff = $1 c in let mf = $2 c in
       fun () -> let funcs, ims, exs = ff () in let m = mf () in
       if funcs <> [] && m.imports <> [] then
         error (List.hd m.imports).at "import after function definition";
       { m with funcs = funcs @ m.funcs;
         imports = ims @ m.imports; exports = exs @ m.exports } }
   | elem module_fields
-    { Printf.printf "%s\n" "elem";
-      fun c -> let ef = $1 c in let mf = $2 c in
+    { fun c -> let ef = $1 c in let mf = $2 c in
       fun () -> let elems = ef () in let m = mf () in
       {m with elems = elems :: m.elems} }
   | data module_fields
-    { Printf.printf "%s\n" "data";
-      fun c -> let df = $1 c in let mf = $2 c in
+    { fun c -> let df = $1 c in let mf = $2 c in
       fun () -> let data = df () in let m = mf () in
       {m with datas = data :: m.datas} }
   | start module_fields
-    { Printf.printf "%s\n" "start";
-      fun c -> let mf = $2 c in
+    { fun c -> let mf = $2 c in
       fun () -> let m = mf () in let x = $1 c in
       match m.start with
       | Some _ -> error x.at "multiple start sections"
       | None -> {m with start = Some x} }
   | import module_fields
-    { Printf.printf "%s\n" "import";
-      fun c -> let imf = $1 c in let mf = $2 c in
+    { fun c -> let imf = $1 c in let mf = $2 c in
       fun () -> let im = imf () in let m = mf () in
       {m with imports = im :: m.imports} }
   | export module_fields
-    { Printf.printf "%s\n" "export";
-      fun c -> let mf = $2 c in
+    { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
       {m with exports = $1 c :: m.exports} }
 

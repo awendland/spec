@@ -6,6 +6,9 @@ open Ast
 open Source
 
 
+let trace name = if !Flags.trace then print_endline ("----- " ^ name)
+
+
 (* Errors *)
 
 module Link = Error.Make ()
@@ -587,12 +590,9 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
   let {dinit; _} = seg.it in
   ref dinit
 
-let print_import im =
-  let {module_name; item_name; _} = im.it in
-  Printf.printf "%s %s\n" (Ast.string_of_name module_name) (Ast.string_of_name item_name)
-
 let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
-  Printf.printf "Resolving "; print_import im;
+  let {module_name; item_name; _} = im.it in
+  trace ("Resolving \"" ^ (Ast.string_of_name module_name) ^ "\" \"" ^ (Ast.string_of_name item_name) ^ "\"...");
   let types_match =
     match (extern_type_of ext), im.it.idesc.it with
     | ExternAbsType ate, AbsTypeImport x -> true (* abstype matches are based purely on reference *)
@@ -662,7 +662,6 @@ let init (m : module_) (exts : extern list) : module_inst =
     { empty_module_inst with
       types = List.map (fun type_ -> type_.it) types }
   in
-  List.iter print_import imports;
   if List.length exts <> List.length imports then
     Link.error m.at "wrong number of imports provided for initialisation";
   (* abstype imports must be resolved first *)
