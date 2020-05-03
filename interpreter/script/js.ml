@@ -255,6 +255,7 @@ let value v =
   | Values.Ref (HostRef n) ->
     [Const (Values.I32 n @@ v.at) @@ v.at; Call (hostref_idx @@ v.at) @@ v.at]
   | Values.Ref _ -> assert false
+  | Values.SealedAbs _ -> raise_no_abstypes v.at
 
 let invoke ft vs at =
   [ft @@ at], FuncImport (subject_type_idx @@ at) @@ at,
@@ -289,6 +290,8 @@ let assert_return ress ts at =
         BrIf (0l @@ at) @@ at ]
     | LitResult {it = Values.Ref _; _} ->
       assert false
+    | LitResult {it = Values.SealedAbs _; _} ->
+      raise_no_abstypes at
     | NanResult nanop ->
       let nan =
         match nanop.it with
