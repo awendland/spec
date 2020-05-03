@@ -11,7 +11,7 @@ type num = (I32.t, I64.t, F32.t, F64.t) op
 type ref_ = ..
 type ref_ += NullRef
 
-type value = Num of num | Ref of ref_
+type value = Num of num | Ref of ref_ | SealedAbs of int32
 
 
 (* Typing *)
@@ -28,17 +28,18 @@ let type_of_ref r = !type_of_ref' r
 let type_of_value = function
   | Num n -> NumType (type_of_num n)
   | Ref r -> RefType (type_of_ref r)
+  | SealedAbs i -> SealedAbsType i
 
 
 (* Projections *)
 
 let as_num = function
   | Num n -> n
-  | Ref _ -> failwith "as_num"
+  | _ -> failwith "as_num"
 
 let as_ref = function
-  | Num _ -> failwith "as_ref"
   | Ref r -> r
+  | _ -> failwith "as_ref"
 
 
 (* Defaults *)
@@ -55,9 +56,7 @@ let default_ref = function
 let default_value = function
   | NumType t' -> Num (default_num t')
   | RefType t' -> Ref (default_ref t')
-  (* Start: Abstract Types *)
-  | SealedAbsType _ -> assert false
-  (* End: Abstract Types *)
+  | SealedAbsType i -> SealedAbs i
   | BotType -> assert false
 
 
@@ -74,9 +73,12 @@ let string_of_num = function
 let string_of_ref' = ref (function NullRef -> "null" | _ -> "ref")
 let string_of_ref r = !string_of_ref' r
 
+let string_of_sealedabs i = "must_init{" ^ Int32.to_string i ^ "}"
+
 let string_of_value = function
   | Num n -> string_of_num n
   | Ref r -> string_of_ref r
+  | SealedAbs i -> string_of_sealedabs i
 
 let string_of_values = function
   | [v] -> string_of_value v
