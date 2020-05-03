@@ -6,6 +6,9 @@ open Ast
 open Source
 
 
+let trace name = if !Flags.trace then print_endline ("----- " ^ name)
+
+
 (* Errors *)
 
 module Link = Error.Make ()
@@ -588,6 +591,8 @@ let create_data (inst : module_inst) (seg : data_segment) : data_inst =
   ref dinit
 
 let add_import (ext : extern) (im : import) (inst : module_inst) : module_inst =
+  let {module_name; item_name; _} = im.it in
+  trace ("Resolving \"" ^ (Ast.string_of_name module_name) ^ "\" \"" ^ (Ast.string_of_name item_name) ^ "\"...");
   let types_match =
     match (extern_type_of ext), im.it.idesc.it with
     | ExternAbsType ate, AbsTypeImport x -> true (* abstype matches are based purely on reference *)
