@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--wasm", metavar="<wasm-command>", default=os.path.join(os.getcwd(), "wasm"))
 parser.add_argument("--js", metavar="<js-command>")
 parser.add_argument("--out", metavar="<out-dir>", default=outputDir)
+parser.add_argument("--scripts-only", action="store_true", help="only run scripts, don't encode/decode/js")
 parser.add_argument("file", nargs='*')
 arguments = parser.parse_args()
 sys.argv = sys.argv[:1]
@@ -25,6 +26,7 @@ sys.argv = sys.argv[:1]
 wasmCommand = arguments.wasm
 jsCommand = arguments.js
 outputDir = arguments.out
+scriptsOnly = arguments.scripts_only
 inputFiles = arguments.file if arguments.file else glob.glob(os.path.join(inputDir, "*.wast"))
 
 if not os.path.exists(wasmCommand):
@@ -65,7 +67,7 @@ class RunTests(unittest.TestCase):
     logPath = self._auxFile(outputPath + ".log")
     self._runCommand(('%s "%s"') % (wasmCommand, inputPath), logPath, expectedExitCode)
 
-    if expectedExitCode != 0:
+    if expectedExitCode != 0 or scriptsOnly:
       return
 
     # Convert to binary and run again
