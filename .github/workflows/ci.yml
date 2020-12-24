@@ -1,0 +1,36 @@
+name: Continuous Integration
+on: [push]
+
+jobs:
+  scripttest:
+    name: Run all core tests (--scripts-only)
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        ocaml-version:
+          - 4.09.1
+          # - 4.08.1
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # Using this action, instead of the ocaml/opam2 docker image, because
+      # there are directory permission errors with the docker image and this
+      # action supports all target OSes (allowing for parity with the build-release
+      # workflow).
+      - uses: avsm/setup-ocaml@v1
+        with:
+          ocaml-version: ${{ matrix.ocaml-version }}
+      
+      - run: opam install ocamlbuild
+
+      - name: Build Wasm interpreter (in debug mode)
+        run: opam exec -- make debug
+        working-directory: ./interpreter/
+
+      - name: Run all core tests (--scripts-only)
+        run: test/core/run.py --wasm 'interpreter/wasm.debug' --scripts-only
