@@ -1,36 +1,37 @@
-[![Build Status](https://travis-ci.org/WebAssembly/reference-types.svg?branch=master)](https://travis-ci.org/WebAssembly/reference-types)
+[![Build Status](https://github.com/awendland/webassembly-spec-abstypes/workflows/Continuous%20Integration/badge.svg)](https://github.com/awendland/webassembly-spec-abstypes/actions)
 
-# Reference Types Proposal for WebAssembly
+# Abstract Types for WebAssembly
 
-This repository is a clone of [github.com/WebAssembly/spec/](https://github.com/WebAssembly/spec/).
-It is meant for discussion, prototype specification and implementation of a proposal to add support for basic reference types to WebAssembly.
+This repository implements a simple of form of abstract types (very similar to [OCaml's Abstract Types](https://ocaml.org/learn/tutorials/modules.html#Abstract-types)) in WebAssembly.
 
-* See the [overview](proposals/reference-types/Overview.md) for a summary of the proposal.
+By including abstract types in Core WebAssembly, there will be a mechanism to enforce higher-level abstractions such as:
 
-* See the [modified spec](https://webassembly.github.io/reference-types/core/) for details.
+* Unforgeable file handles (e.g. in [WASI](https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/witx/typenames.witx#L277))
+* Object types (i.e. allowing functions to only operate on a given Object)
+* Object references (i.e. unforgeable addresses, e.g. referring to `a` in `let a = new Date(); a.getYear()`)
 
-The repository is now based on the [bulk operations proposal](proposals/bulk-memory-operations/Overview.md) and includes all respective changes.
+This project was created during [@awendland](https://github.com/awendland)'s undergraduate thesis which focuses on using [WebAssembly as a Multi-Language Platform](https://github.com/awendland/2020-thesis). A PDF copy of the thesis can be found at [awendland/2020-thesis/paper/thesis-harvard-2020.pdf](https://github.com/awendland/2020-thesis/blob/master/paper/thesis-harvard-2020.pdf).
 
-Original README from upstream repository follows...
+The repository is based on the [reference types proposal](https://github.com/WebAssembly/reference-types) and includes all respective changes. The `proposal-reference-types-master` branch tracks upstream for easy diffing.
 
-# spec
+## Syntax Overview
 
-This repository holds a prototypical reference implementation for WebAssembly,
-which is currently serving as the official specification. Eventually, we expect
-to produce a specification either written in human-readable prose or in a formal
-specification language.
+The following syntax is verbose in order to ensure clarity in the operations being performed. It's likely that a more ergonomic syntax would be adopted, such as merging the `abstype_new` and `abstype_sealed` namespaces and referring to them with a single operator, as well as overloading the existing `type` instruction to support abstract types. For now, the syntax is as follows:
 
-It also holds the WebAssembly testsuite, which tests numerous aspects of
-conformance to the spec.
+|                      |                                       |                    |
+|----------------------|---------------------------------------|--------------------|
+| `abstype_new`        | `abstype_new [IDENTIFIER] value_type` | Create a new abstract type around a given value_type (which can be another abstract type via `abstype_sealed_ref`) |
+| `abstype_sealed`     | `abstype_sealed [IDENTIFIER]`         | Import a foreign abstract type. Always used within an `import` instruction, i.e. `(import "mod" "id" (abstype_sealed [IDENTIFIER]))` |
+| `abstype_new_ref`    | `abstype_new_ref IDENTIFIER`          | Reference a local abstract type (i.e. one locally declared using `abstype_new`) |
+| `abstype_sealed_ref` | `abstype_sealed_ref IDENTIFIER`       | Reference an imported foreign abstract type (i.e. one imported via `abstype_sealed`) |
 
-View the work-in-progress spec at [webassembly.github.io/spec](https://webassembly.github.io/spec/).
+Abstract types manifest in two ways:
 
-At this time, the contents of this repository are under development and known
-to be "incomplet and inkorrect".
+* _Local_ - Local abstract types are at play when `abstype_new*` instructions are used within a given module. These abstract types are "unwrapped" within the module, and are treated as their underlying value_types. In this way, local abstract types are more like type aliases. This allows abstract types to be constructed, and only take on their abstract nature when used in a separate module.
+* _Foreign / Sealed_ - Foreign, or sealed, abstract types are present when `abstype_sealed*` instructions are being used. These abstract types are treated as opaque identifiers referencing the source module instance and the export statement. These abstract types are only treated as their underlying values upon program execution (i.e. after validation). Additionally, they do not have default values, so trying to immediately use a `local` with a sealed abstract type will fail, instead, the `local` must be populated with a value provided by the sealed abstract type's source module.
 
-Participation is welcome. Discussions about new features, significant semantic
-changes, or any specification change likely to generate substantial discussion
-should take place in
-[the WebAssembly design repository](https://github.com/WebAssembly/design)
-first, so that this spec repository can remain focused. And please follow the
-[guidelines for contributing](Contributing.md).
+All uses of `value_type` (should) have been expanded to support abstract types.
+
+## Samples
+
+TODO - see [test/core/abstract-types.wast](test/core/abstract-types.wast).
