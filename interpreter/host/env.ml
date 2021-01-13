@@ -7,6 +7,7 @@
 open Values
 open Types
 open Instance
+open Extern_types
 
 
 let error msg = raise (Eval.Crash (Source.no_region, msg))
@@ -41,6 +42,8 @@ let exit vs =
 
 let lookup name t =
   match Utf8.encode name, t with
-  | "abort", ExternFuncType t -> ExternFunc (Func.alloc_host t abort)
-  | "exit", ExternFuncType t -> ExternFunc (Func.alloc_host t exit)
+  | "abort", ExternFuncType et ->
+    ExternFunc (Func.alloc_host (func_type_from_extern et) abort)
+  | "exit", ExternFuncType et ->
+    ExternFunc (Func.alloc_host (func_type_from_extern et) exit)
   | _ -> raise Not_found

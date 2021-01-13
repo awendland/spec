@@ -183,6 +183,13 @@ rule token = parse
   | "ref.host" { REF_HOST }
   | "ref.is_null" { REF_IS_NULL }
 
+  (* Start: Abstract Types *)
+  | "abstype_new" { ABSTYPE_NEW }
+  | "abstype_new_ref" { ABSTYPE_NEW_REF }
+  | "abstype_sealed" { ABSTYPE_SEALED }
+  | "abstype_sealed_ref" { ABSTYPE_SEALED_REF }
+  (* End: Abstract Types *)
+
   | "nop" { NOP }
   | "unreachable" { UNREACHABLE }
   | "drop" { DROP }

@@ -58,13 +58,15 @@ let break_string s =
 let num_type t = string_of_num_type t
 let ref_type t = string_of_ref_type t
 let value_type t = string_of_value_type t
+let wrapped_value_type t = string_of_wrapped_value_type t
 
 let decls kind ts = tab kind (atom value_type) ts
+let decls_wrapped kind ts = tab kind (atom wrapped_value_type) ts
 
-let stack_type ts = decls "result" ts
+let raw_stack_type ts = decls "result" ts
 
 let func_type (FuncType (ins, out)) =
-  Node ("func", decls "param" ins @ decls "result" out)
+  Node ("func", decls_wrapped "param" ins @ decls_wrapped "result" out)
 
 let struct_type = func_type
 
@@ -228,10 +230,10 @@ let rec instr e =
     | Select None -> "select", []
     | Select (Some []) -> "select", [Node ("result", [])]
     | Select (Some ts) -> "select", decls "result" ts
-    | Block (ts, es) -> "block", stack_type ts @ list instr es
-    | Loop (ts, es) -> "loop", stack_type ts @ list instr es
+    | Block (ts, es) -> "block", raw_stack_type ts @ list instr es
+    | Loop (ts, es) -> "loop", raw_stack_type ts @ list instr es
     | If (ts, es1, es2) ->
-      "if", stack_type ts @
+      "if", raw_stack_type ts @
         [Node ("then", list instr es1); Node ("else", list instr es2)]
     | Br x -> "br " ^ var x, []
     | BrIf x -> "br_if " ^ var x, []
@@ -358,6 +360,7 @@ let typedef i ty =
 
 let import_desc fx tx mx gx d =
   match d.it with
+  | AbsTypeImport x -> Node ("abstype_sealed", [atom var x])
   | FuncImport x ->
     incr fx; Node ("func $" ^ nat (!fx - 1), [Node ("type", [atom var x])])
   | TableImport t ->
@@ -375,6 +378,7 @@ let import fx tx mx gx im =
 
 let export_desc d =
   match d.it with
+  | AbsTypeExport x -> Node ("abstype_new", [atom var x])
   | FuncExport x -> Node ("func", [atom var x])
   | TableExport x -> Node ("table", [atom var x])
   | MemoryExport x -> Node ("memory", [atom var x])

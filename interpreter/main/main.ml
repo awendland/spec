@@ -6,7 +6,7 @@ let configure () =
   Import.register (Utf8.decode "env") Env.lookup
 
 let banner () =
-  print_endline (name ^ " " ^ version ^ " reference interpreter")
+  print_endline (name ^ " " ^ version ^ " reference interpreter + abstract types")
 
 let usage = "Usage: " ^ name ^ " [option] [file ...]"
 

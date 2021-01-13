@@ -209,26 +209,18 @@ let input_stdin run =
 (* Printing *)
 
 let print_import m im =
-  let open Types in
+  let open Extern_types in
   let category, annotation =
-    match Ast.import_type m im with
-    | ExternFuncType t -> "func", string_of_func_type t
-    | ExternTableType t -> "table", string_of_table_type t
-    | ExternMemoryType t -> "memory", string_of_memory_type t
-    | ExternGlobalType t -> "global", string_of_global_type t
+    annotation_of_unresolved_extern_type (unresolved_import_type m im)
   in
   Printf.printf "  import %s \"%s\" \"%s\" : %s\n"
     category (Ast.string_of_name im.it.Ast.module_name)
       (Ast.string_of_name im.it.Ast.item_name) annotation
 
 let print_export m ex =
-  let open Types in
+  let open Extern_types in
   let category, annotation =
-    match Ast.export_type m ex with
-    | ExternFuncType t -> "func", string_of_func_type t
-    | ExternTableType t -> "table", string_of_table_type t
-    | ExternMemoryType t -> "memory", string_of_memory_type t
-    | ExternGlobalType t -> "global", string_of_global_type t
+    annotation_of_unresolved_extern_type (unresolved_export_type m ex)
   in
   Printf.printf "  export %s \"%s\" : %s\n"
     category (Ast.string_of_name ex.it.Ast.name) annotation
@@ -339,7 +331,7 @@ let run_action act : Values.value list =
       List.iter2 (fun v t ->
         if not (Types.match_value_type (Values.type_of_value v.it) t) then
           Script.error v.at "wrong type of argument"
-      ) vs ins;
+      ) vs (Types.unwrap_stack ins);
       Eval.invoke f (List.map (fun v -> v.it) vs)
     | Some _ -> Assert.error act.at "export is not a function"
     | None -> Assert.error act.at "undefined export"
