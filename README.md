@@ -34,4 +34,10 @@ All uses of `value_type` (should) have been expanded to support abstract types.
 
 ## Samples
 
-TODO - see [test/core/abstract-types.wast](test/core/abstract-types.wast).
+See [test/core/abstract-types.wast](test/core/abstract-types.wast).
+
+For something more interesting, I've configured my [awendland/2020-thesis](https://github.com/awendland/2020-thesis) repository to be runnable via [Binder](https://mybinder.org) so that you can jump right into a web-based Jupyter notebook with this `webassembly-spec-abstypes` interpreter already available and the code in `samples/` all runnable. Try it out with: [![launch Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/awendland/2020-thesis/HEAD?filepath=samples/samples.ipynb)
+
+## Further Details
+
+See [PR#4](https://github.com/awendland/webassembly-spec-abstypes/pull/4) which isolates all abstract type specific changes made on top of the upstream branch. The description for this PR includes additional implementation details and other resources.
